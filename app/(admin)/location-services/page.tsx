@@ -4,37 +4,36 @@
 import { useEffect, useState } from 'react'
 import Link                    from 'next/link'
 import { getBrowserClient }    from '@/lib/supabase'
-import { Settings, Search, ArrowRight, Filter } from 'lucide-react'
+import { CreateLSModal }       from '@/components/create/CreateLSModal'
+import { Settings, Search, ArrowRight, Filter, Plus } from 'lucide-react'
 
 export default function LocationServicesPage() {
-  const [rows,     setRows]     = useState<Record<string, unknown>[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [search,   setSearch]   = useState('')
-  const [city,     setCity]     = useState('bangalore')
-  const [category, setCategory] = useState('')
+  const [rows,       setRows]       = useState<Record<string, unknown>[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState('')
+  const [city,       setCity]       = useState('bangalore')
+  const [category,   setCategory]   = useState('')
+  const [showCreate, setShowCreate] = useState(false)
 
   const CITIES = ['bangalore', 'mumbai', 'chennai', 'hyderabad']
   const CATS   = ['', 'battery', 'tyre', 'oil-change', 'bike-repair', 'towing', 'roadside-assistance', 'general-repair', 'ac-service']
 
-  useEffect(() => {
-    const fetch = async () => {
-      setLoading(true)
-      const sb = getBrowserClient()
-      let q = sb
-        .from('location_services')
-        .select('id, service_slug, service_name, service_category, city_slug, area_slug, is_active, is_city_level, updated_at')
-        .eq('city_slug', city)
-        .order('service_category')
-        .order('service_name')
+  const load = async () => {
+    setLoading(true)
+    const sb = getBrowserClient()
+    let q = sb
+      .from('location_services')
+      .select('id, service_slug, service_name, service_category, city_slug, area_slug, is_active, is_city_level, updated_at')
+      .eq('city_slug', city)
+      .order('service_category')
+      .order('service_name')
+    if (category) q = q.eq('service_category', category)
+    const { data } = await q
+    setRows(data ?? [])
+    setLoading(false)
+  }
 
-      if (category) q = q.eq('service_category', category)
-
-      const { data } = await q
-      setRows(data ?? [])
-      setLoading(false)
-    }
-    fetch()
-  }, [city, category])
+  useEffect(() => { load() }, [city, category])
 
   const filtered = rows.filter((r) =>
     !search ||
@@ -72,15 +71,21 @@ export default function LocationServicesPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Settings className="w-6 h-6 text-purple-400" />
-          Location Services
-        </h1>
-        <p className="text-[#94a3b8] text-sm mt-1">
-          Edit pricing, FAQs, testimonials and content for each city-level service.
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="admin-page-title flex items-center gap-2">
+            <Settings className="w-6 h-6 text-purple-400" />
+            Location Services
+          </h1>
+          <p className="text-[#94a3b8] text-sm mt-1">
+            Edit pricing, FAQs, testimonials and content for each service.
+          </p>
+        </div>
+        <button onClick={() => setShowCreate(true)} className="admin-btn-primary">
+          <Plus className="w-4 h-4" /> New Location Service
+        </button>
       </div>
+      <CreateLSModal open={showCreate} onClose={() => setShowCreate(false)} onCreated={load} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">

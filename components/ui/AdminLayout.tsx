@@ -9,7 +9,7 @@ import { getBrowserClient } from '@/lib/supabase'
 import {
   Wrench, LayoutDashboard, MapPin, Settings,
   FileText, Package, Layers, LogOut,
-  Menu, X, ChevronRight, Globe,
+  Menu, X, ChevronRight, Globe, Image,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -20,6 +20,7 @@ const NAV = [
   { href: '/city-service-pages',  icon: Layers,          label: 'Category Pages'    },
   { href: '/posts',               icon: FileText,        label: 'Blog Posts'        },
   { href: '/services',            icon: Package,         label: 'Services'          },
+  { href: '/media',               icon: Image,           label: 'Media Library'     },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

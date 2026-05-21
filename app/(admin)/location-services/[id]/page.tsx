@@ -15,6 +15,7 @@ import {
   ArrowLeft, ExternalLink, RefreshCw, Loader2,
   Plus, Trash2, Save, ChevronDown, ChevronRight,
   Star, Globe, BarChart2, Image as ImageIcon,
+  Check, X,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -30,6 +31,7 @@ const TABS = [
   { id: 'related',     label: 'Related'     },
   { id: 'images',      label: 'Images'      },
   { id: 'reviews',     label: 'Reviews'     },
+  { id: 'schema',      label: 'Schema'      },
   { id: 'seo_content', label: 'SEO Content' },
   { id: 'analytics',   label: 'Analytics'  },
 ] as const
@@ -141,9 +143,9 @@ export default function LSEditorPage() {
     showToast('success', 'Saved')
   }
 
-  const liveUrl = ls.canonical_url
-    ? `https://fiixup.in${String(ls.canonical_url).startsWith('/') ? '' : '/'}${ls.canonical_url}`
-    : `https://fiixup.in/${ls.city_slug}/${ls.service_slug}`
+  const liveUrl = s(ls.canonical_url).startsWith('http')
+    ? s(ls.canonical_url)
+    : `https://fiixup.in/${s(ls.city_slug)}${s(ls.area_slug) ? '/'+s(ls.area_slug) : ''}/${s(ls.service_slug)}`
 
   return (
     <div className="space-y-5">
@@ -386,33 +388,12 @@ export default function LSEditorPage() {
 
       {/* ══════════════ NEARBY AREAS ══════════════ */}
       {tab === 'nearby' && (
-        <div className="space-y-4">
-          <SectionHeader title="Nearby Areas" count={nearby.length}>
-            <AddBtn table="ls_nearby_areas" parentKey="location_service_id" parentId={id}
-              fields={[
-                { key: 'name',       label: 'Area Name', type: 'text', required: true },
-                { key: 'slug',       label: 'Area Slug', type: 'text', required: true },
-                { key: 'sort_order', label: 'Sort Order',type: 'number' },
-              ]}
-              onAdded={fetchAll}
-            />
-          </SectionHeader>
-          <p className="text-xs text-[#6b7280]">
-            These appear as internal links on the service page — each linking to /{s(ls.city_slug)}/[area-slug]
-          </p>
-          {nearby.length === 0 && <Empty>No nearby areas yet.</Empty>}
-          {nearby.map(row => (
-            <ChildRow key={s(row.id)} row={row} table="ls_nearby_areas"
-              preview={`${s(row.name)} → /${s(ls.city_slug)}/${s(row.slug)}`}
-              fields={[
-                { key: 'name',       label: 'Area Name', type: 'text'   },
-                { key: 'slug',       label: 'Area Slug', type: 'text'   },
-                { key: 'sort_order', label: 'Sort Order',type: 'number' },
-              ]}
-              onSave={fetchAll}
-            />
-          ))}
-        </div>
+        <NearbyAreasPicker
+          lsId={id}
+          citySlug={s(ls.city_slug)}
+          existing={nearby}
+          onRefresh={fetchAll}
+        />
       )}
 
       {/* ══════════════ RELATED SERVICES ══════════════ */}
@@ -447,37 +428,11 @@ export default function LSEditorPage() {
 
       {/* ══════════════ IMAGES ══════════════ */}
       {tab === 'images' && (
-        <div className="space-y-4">
-          <SectionHeader title="Service Images" count={images.length}>
-            <AddBtn table="service_images" parentKey="ls_id" parentId={id}
-              fields={[
-                { key: 'url',        label: 'Image URL',  type: 'text', required: true },
-                { key: 'alt_text',   label: 'Alt Text',   type: 'text', required: true },
-                { key: 'caption',    label: 'Caption',    type: 'text' },
-                { key: 'is_hero',    label: 'Hero Image (true/false)', type: 'text' },
-                { key: 'sort_order', label: 'Sort Order', type: 'number' },
-              ]}
-              onAdded={fetchAll}
-            />
-          </SectionHeader>
-          {images.length === 0 && <Empty>No images yet.</Empty>}
-          {images.map(row => (
-            <div key={s(row.id)} className="admin-card p-4 flex items-start gap-4">
-              {s(row.url) && (
-                <img src={s(row.url)} alt={s(row.alt_text)}
-                  className="w-24 h-16 object-cover rounded-lg flex-shrink-0 bg-[#2a2d3e]"
-                  onError={e => (e.currentTarget.style.display = 'none')}
-                />
-              )}
-              <div className="flex-1 min-w-0 space-y-1">
-                <p className="text-sm font-semibold text-[#e2e8f0] truncate">{s(row.alt_text)}</p>
-                <p className="text-xs text-[#6b7280] truncate">{s(row.url)}</p>
-                {Boolean(row.is_hero) && <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">Hero</span>}
-              </div>
-              <DelBtn table="service_images" id={s(row.id)} onDeleted={fetchAll} />
-            </div>
-          ))}
-        </div>
+        <ImagePickerTab
+          lsId={id}
+          images={images}
+          onRefresh={fetchAll}
+        />
       )}
 
       {/* ══════════════ REVIEWS ══════════════ */}
@@ -514,6 +469,11 @@ export default function LSEditorPage() {
             />
           ))}
         </div>
+      )}
+
+      {/* ══════════════ SCHEMA ══════════════ */}
+      {tab === 'schema' && (
+        <SchemaEditor ls={ls} onSave={saveLSJson} fetchAll={fetchAll} faqs={faqs} />
       )}
 
       {/* ══════════════ SEO CONTENT ══════════════ */}
@@ -864,3 +824,468 @@ function JsonField({ label, value, onSave }: {
     </div>
   )
 }
+
+// ── Badge helper ──────────────────────────────────────────────────────────────
+function Badge({ children }: { children: React.ReactNode }) {
+  return <span className="ml-1.5 text-xs bg-[#2a2d3e] text-[#94a3b8] px-2 py-0.5 rounded-full font-normal">{children}</span>
+}
+
+// ── NearbyAreasPicker — shows city areas as clickable buttons ─────────────────
+function NearbyAreasPicker({ lsId, citySlug, existing, onRefresh }: {
+  lsId: string; citySlug: string
+  existing: Row[]; onRefresh: () => void
+}) {
+  const sb = getBrowserClient()
+  const [cityAreas, setCityAreas] = useState<{id: number; name: string; slug: string}[]>([])
+  const [adding,    setAdding]    = useState<string | null>(null)
+  const [deleting,  setDeleting]  = useState<string | null>(null)
+
+  useEffect(() => {
+    sb.from('areas').select('id,name,slug').eq('city_slug', citySlug).order('sort_order')
+      .then(({ data }) => setCityAreas(data ?? []))
+  }, [citySlug])
+
+  const existingSlugs = new Set(existing.map(e => s(e.slug)))
+
+  const addArea = async (area: { id: number; name: string; slug: string }) => {
+    setAdding(area.slug)
+    const { error } = await sb.from('ls_nearby_areas').insert({
+      location_service_id: lsId,
+      area_id:    area.id,
+      name:       area.name,
+      slug:       area.slug,
+      sort_order: existing.length,
+    })
+    setAdding(null)
+    if (error) { showToast('error', error.message); return }
+    showToast('success', `${area.name} added`)
+    onRefresh()
+  }
+
+  const removeArea = async (rowId: string, name: string) => {
+    if (!confirm(`Remove ${name}?`)) return
+    setDeleting(rowId)
+    await sb.from('ls_nearby_areas').delete().eq('id', rowId)
+    setDeleting(null)
+    showToast('success', 'Removed')
+    onRefresh()
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="admin-card p-5">
+        <h3 className="admin-section-title mb-3">
+          City Areas <span className="text-xs text-[#6b7280] font-normal ml-1">— click to add as nearby area</span>
+        </h3>
+        <p className="text-xs text-[#6b7280] mb-4">
+          These appear as internal links on the service page linking to /{citySlug}/[area]
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {cityAreas.map(area => {
+            const isAdded = existingSlugs.has(area.slug)
+            return (
+              <button key={area.slug}
+                onClick={() => !isAdded && addArea(area)}
+                disabled={isAdded || adding === area.slug}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all',
+                  isAdded
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400 cursor-default'
+                    : 'bg-[#1a1d27] border-[#2a2d3e] text-[#94a3b8] hover:border-blue-500/50 hover:text-blue-400 hover:bg-blue-500/5'
+                )}>
+                {adding === area.slug
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : isAdded
+                    ? <Check className="w-3.5 h-3.5" />
+                    : <Plus className="w-3.5 h-3.5" />
+                }
+                {area.name}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="admin-card p-5">
+        <h3 className="admin-section-title mb-3">Added Nearby Areas <Badge>{existing.length}</Badge></h3>
+        {existing.length === 0
+          ? <p className="text-[#6b7280] text-sm italic">No areas added yet. Click areas above to add them.</p>
+          : <div className="space-y-2">
+              {existing.map(row => (
+                <div key={s(row.id)} className="flex items-center gap-3 bg-[#0f1117] rounded-lg px-4 py-2.5">
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-[#e2e8f0]">{s(row.name)}</span>
+                    <span className="text-xs text-[#6b7280] ml-2">/{citySlug}/{s(row.slug)}</span>
+                  </div>
+                  <button onClick={() => removeArea(s(row.id), s(row.name))}
+                    disabled={deleting === s(row.id)}
+                    className="text-[#475569] hover:text-red-400 transition-colors">
+                    {deleting === s(row.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+    </div>
+  )
+}
+
+// ── ImagePickerTab — browse media library + add images ────────────────────────
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+
+function ImagePickerTab({ lsId, images, onRefresh }: {
+  lsId: string; images: Row[]; onRefresh: () => void
+}) {
+  const sb = getBrowserClient()
+  const [mediaItems, setMediaItems] = useState<Row[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [folder,     setFolder]     = useState('all')
+  const [adding,     setAdding]     = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
+  const [isHero,     setIsHero]     = useState(false)
+  const [altText,    setAltText]    = useState('')
+  const [caption,    setCaption]    = useState('')
+  const [picked,     setPicked]     = useState<Row | null>(null)
+
+  const FOLDERS = ['all','cities','services','location-services','blog','og','general']
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      let q = sb.from('media_library').select('id,public_url,file_name,title,alt_text,folder').order('created_at', { ascending: false })
+      if (folder !== 'all') q = q.eq('folder', folder)
+      const { data } = await q
+      setMediaItems(data ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [folder])
+
+  const addImage = async () => {
+    if (!picked) return
+    setAdding(true)
+    const { error } = await sb.from('service_images').insert({
+      ls_id:      parseInt(lsId),
+      url:        s(picked.public_url),
+      alt_text:   altText || s(picked.alt_text) || s(picked.file_name),
+      caption:    caption,
+      is_hero:    isHero,
+      sort_order: images.length,
+    })
+    setAdding(false)
+    if (error) { showToast('error', error.message); return }
+    showToast('success', 'Image added')
+    setPicked(null); setAltText(''); setCaption(''); setIsHero(false)
+    setShowPicker(false)
+    onRefresh()
+  }
+
+  const removeImage = async (id: string) => {
+    if (!confirm('Remove this image?')) return
+    await sb.from('service_images').delete().eq('id', id)
+    showToast('success', 'Removed')
+    onRefresh()
+  }
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader title="Service Images" count={images.length}>
+        <button onClick={() => setShowPicker(true)} className="admin-btn-primary">
+          <Plus className="w-4 h-4" /> Add from Media Library
+        </button>
+      </SectionHeader>
+
+      {images.length === 0 && <Empty>No images yet. Add from Media Library.</Empty>}
+      {images.map(row => (
+        <div key={s(row.id)} className="admin-card p-4 flex items-start gap-4">
+          {s(row.url) && (
+            <img src={s(row.url)} alt={s(row.alt_text)}
+              className="w-28 h-20 object-cover rounded-lg flex-shrink-0 bg-[#2a2d3e]"
+              onError={e => (e.currentTarget.style.display='none')} />
+          )}
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-sm font-semibold text-[#e2e8f0] truncate">{s(row.alt_text)}</p>
+            <p className="text-xs text-[#6b7280] truncate">{s(row.url)}</p>
+            {Boolean(row.is_hero) && <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">Hero</span>}
+          </div>
+          <button onClick={() => removeImage(s(row.id))} className="text-[#475569] hover:text-red-400 transition-colors">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+
+      {/* Media picker modal */}
+      {showPicker && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111827] border border-[#1e2535] rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-[#1e2535]">
+              <h3 className="font-bold text-[#e2e8f0]">Choose from Media Library</h3>
+              <button onClick={() => { setShowPicker(false); setPicked(null) }} className="text-[#6b7280] hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+
+            {/* Folder filter */}
+            <div className="flex gap-1 p-4 border-b border-[#1e2535] flex-wrap">
+              {FOLDERS.map(f => (
+                <button key={f} onClick={() => setFolder(f)}
+                  className={clsx('px-3 py-1 rounded-lg text-xs font-medium capitalize transition-all',
+                    folder === f ? 'tab-active' : 'tab-inactive')}>
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            {/* Grid */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loading ? (
+                <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+                  {mediaItems.map(item => (
+                    <button key={s(item.id)} onClick={() => { setPicked(item); setAltText(s(item.alt_text) || s(item.title) || '') }}
+                      className={clsx('relative aspect-square rounded-xl overflow-hidden border-2 transition-all',
+                        picked?.id === item.id ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-[#2a2d3e] hover:border-[#3a3d4e]')}>
+                      <img src={s(item.public_url)} alt={s(item.alt_text)} className="w-full h-full object-cover bg-[#1a1d27]" />
+                      {picked?.id === item.id && (
+                        <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                  {mediaItems.length === 0 && <p className="col-span-5 text-center text-[#6b7280] py-8 text-sm">No images in this folder.</p>}
+                </div>
+              )}
+            </div>
+
+            {/* Options + confirm */}
+            {picked && (
+              <div className="border-t border-[#1e2535] p-4 space-y-3">
+                <div className="flex items-center gap-3 bg-[#0f1117] rounded-xl p-3">
+                  <img src={s(picked.public_url)} alt="" className="w-16 h-12 object-cover rounded-lg" />
+                  <p className="text-sm text-[#e2e8f0] truncate flex-1">{s(picked.file_name)}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="admin-label">Alt Text</label>
+                    <input type="text" value={altText} onChange={e => setAltText(e.target.value)} className="admin-input text-sm" />
+                  </div>
+                  <div>
+                    <label className="admin-label">Caption</label>
+                    <input type="text" value={caption} onChange={e => setCaption(e.target.value)} className="admin-input text-sm" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <button onClick={() => setIsHero(!isHero)}
+                      className={clsx('w-8 h-4 rounded-full transition-colors', isHero ? 'bg-blue-600' : 'bg-[#2a2d3e]')}>
+                      <span className={clsx('block w-3 h-3 rounded-full bg-white shadow transition-transform', isHero ? 'translate-x-4' : 'translate-x-0.5')} />
+                    </button>
+                    <span className="text-sm text-[#94a3b8]">Set as Hero Image</span>
+                  </label>
+                  <button onClick={addImage} disabled={adding} className="admin-btn-primary">
+                    {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Add Image
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SchemaEditor — FAQ schema auto-generate + custom schema ───────────────────
+const SCHEMA_TYPES = [
+  { id: 'faq',        label: 'FAQPage',        desc: 'Auto-generated from your FAQs tab' },
+  { id: 'service',    label: 'Service',         desc: 'Service schema with price and area' },
+  { id: 'local',      label: 'LocalBusiness',   desc: 'Local business with address' },
+  { id: 'breadcrumb', label: 'BreadcrumbList',  desc: 'Auto-generated breadcrumb trail' },
+  { id: 'review',     label: 'AggregateRating', desc: 'Star rating from schema_aggregate_rating' },
+  { id: 'custom',     label: 'Custom JSON-LD',  desc: 'Paste any valid schema JSON' },
+]
+
+function SchemaEditor({ ls, onSave, fetchAll, faqs }: {
+  ls: Row; onSave: (col: string) => (val: string) => Promise<unknown>
+  fetchAll: () => void; faqs: Row[]
+}) {
+  const [selected, setSelected] = useState<string[]>(['faq','breadcrumb','review'])
+  const [customJson, setCustomJson] = useState('')
+  const [preview,    setPreview]    = useState('')
+  const [generating, setGenerating] = useState(false)
+
+  const generateSchema = () => {
+    setGenerating(true)
+    const schemas: Record<string,unknown>[] = []
+    const city    = s(ls.city_slug)
+    const area    = s(ls.area_slug)
+    const name    = s(ls.service_name)
+    const url     = s(ls.canonical_url).startsWith('http') ? s(ls.canonical_url) : `https://fiixup.in/${city}${area?'/'+area:''}/${s(ls.service_slug)}`
+    const phone   = '+918197459732'
+    const rating  = Number(ls.schema_aggregate_rating) || 4.9
+    const reviews = Number(ls.schema_review_count)     || 150
+
+    if (selected.includes('breadcrumb')) {
+      schemas.push({
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type':'ListItem', position:1, name:'Home',      item:'https://fiixup.in' },
+          { '@type':'ListItem', position:2, name:city.charAt(0).toUpperCase()+city.slice(1), item:`https://fiixup.in/${city}` },
+          ...(area ? [{ '@type':'ListItem', position:3, name:area.replace(/-/g,' '), item:`https://fiixup.in/${city}/${area}` }] : []),
+          { '@type':'ListItem', position: area?4:3, name, item: url },
+        ]
+      })
+    }
+
+    if (selected.includes('service')) {
+      schemas.push({
+        '@type':       'Service',
+        name,
+        url,
+        description:   s(ls.hero_subheading),
+        provider: {
+          '@type': 'LocalBusiness',
+          name:    'Fiixup',
+          telephone: phone,
+        },
+        areaServed: { '@type': 'City', name: city.charAt(0).toUpperCase()+city.slice(1) },
+        offers: { '@type': 'Offer', priceSpecification: { '@type': 'PriceSpecification', priceCurrency: 'INR' } },
+      })
+    }
+
+    if (selected.includes('local')) {
+      schemas.push({
+        '@type':    'LocalBusiness',
+        name:       'Fiixup',
+        url:        'https://fiixup.in',
+        telephone:  phone,
+        areaServed: city.charAt(0).toUpperCase()+city.slice(1),
+        priceRange: '₹₹',
+      })
+    }
+
+    if (selected.includes('review')) {
+      schemas.push({
+        '@type':           'AggregateRating',
+        itemReviewed: { '@type': 'Service', name },
+        ratingValue:       rating,
+        reviewCount:       reviews,
+        bestRating:        5,
+        worstRating:       1,
+      })
+    }
+
+    if (selected.includes('faq') && faqs.length > 0) {
+      schemas.push({
+        '@type': 'FAQPage',
+        mainEntity: faqs.map(faq => ({
+          '@type':          'Question',
+          name:             s(faq.question),
+          acceptedAnswer: { '@type': 'Answer', text: s(faq.answer) },
+        }))
+      })
+    }
+
+    if (selected.includes('custom') && customJson) {
+      try { schemas.push(JSON.parse(customJson)) } catch { showToast('error', 'Invalid custom JSON') }
+    }
+
+    const output = JSON.stringify({ '@context':'https://schema.org', '@graph': schemas }, null, 2)
+    setPreview(output)
+    setGenerating(false)
+    showToast('success', 'Schema generated — review below and save')
+  }
+
+  const saveSchema = async () => {
+    if (!preview) { showToast('error', 'Generate schema first'); return }
+    try {
+      const parsed = JSON.parse(preview)
+      await onSave('seo_sections')(JSON.stringify(parsed))
+    } catch { showToast('error', 'Invalid JSON in preview') }
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Schema type selector */}
+      <div className="admin-card p-5">
+        <h3 className="admin-section-title mb-1">Schema Types</h3>
+        <p className="text-xs text-[#6b7280] mb-4">Select schema types to include. FAQPage auto-generates from your FAQs tab ({faqs.length} FAQs found).</p>
+        <div className="grid grid-cols-2 gap-3">
+          {SCHEMA_TYPES.map(type => (
+            <button key={type.id}
+              onClick={() => setSelected(p => p.includes(type.id) ? p.filter(x=>x!==type.id) : [...p,type.id])}
+              className={clsx(
+                'flex items-start gap-3 p-3 rounded-xl border text-left transition-all',
+                selected.includes(type.id)
+                  ? 'border-blue-500 bg-blue-500/5'
+                  : 'border-[#2a2d3e] hover:border-[#3a3d4e]'
+              )}>
+              <div className={clsx('w-4 h-4 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors',
+                selected.includes(type.id) ? 'border-blue-500 bg-blue-500' : 'border-[#475569]')}>
+                {selected.includes(type.id) && <Check className="w-2.5 h-2.5 text-white" />}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#e2e8f0]">{type.label}</p>
+                <p className="text-xs text-[#6b7280] mt-0.5">{type.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {selected.includes('custom') && (
+          <div className="mt-4">
+            <label className="admin-label">Custom JSON-LD</label>
+            <textarea value={customJson} onChange={e => setCustomJson(e.target.value)}
+              rows={6} className="admin-textarea font-mono text-xs"
+              placeholder='{ "@type": "Thing", ... }' />
+          </div>
+        )}
+
+        <button onClick={generateSchema} disabled={generating} className="admin-btn-primary mt-4">
+          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Generate Schema
+        </button>
+      </div>
+
+      {/* Preview + Save */}
+      {preview && (
+        <div className="admin-card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="admin-section-title">Generated Schema JSON-LD</h3>
+            <button onClick={saveSchema} className="admin-btn-primary">
+              <Save className="w-4 h-4" /> Save to Page
+            </button>
+          </div>
+          <pre className="bg-[#0f1117] rounded-xl p-4 text-xs text-[#94a3b8] font-mono overflow-auto max-h-96 leading-relaxed">
+            {preview}
+          </pre>
+        </div>
+      )}
+
+      {/* Quick stats */}
+      <div className="admin-card p-5">
+        <h3 className="admin-section-title mb-3">Schema Signals</h3>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-[#0f1117] rounded-xl p-3">
+            <p className="text-xl font-bold text-[#e2e8f0]">{String(ls.schema_aggregate_rating ?? 4.9)}</p>
+            <p className="text-xs text-[#6b7280] mt-1">Rating</p>
+          </div>
+          <div className="bg-[#0f1117] rounded-xl p-3">
+            <p className="text-xl font-bold text-[#e2e8f0]">{String(ls.schema_review_count ?? 150)}</p>
+            <p className="text-xs text-[#6b7280] mt-1">Reviews</p>
+          </div>
+          <div className="bg-[#0f1117] rounded-xl p-3">
+            <p className="text-xl font-bold text-[#e2e8f0]">{faqs.length}</p>
+            <p className="text-xs text-[#6b7280] mt-1">FAQ entries</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Missing imports needed by new components ──────────────────────────────────
+// These must be added to the top import block manually if not already there:
+// Check, Plus, Trash2, X, Save are already imported above
