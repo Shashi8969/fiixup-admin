@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  html {
+    @apply bg-[#0f1117];
+  }
+  body {
+    @apply bg-[#0f1117] text-[#e2e8f0] antialiased min-h-screen;
+  }
+  ::-webkit-scrollbar        { width: 6px; }
+  ::-webkit-scrollbar-track  { background: #1a1d27; }
+  ::-webkit-scrollbar-thumb  { background: #2a2d3e; border-radius: 9999px; }
+  input, textarea, select {
+    @apply bg-[#0f1117] text-[#e2e8f0];
+  }
+}
+
+@layer components {
+
+  /* ── Inputs ── */
+  .admin-input {
+    @apply w-full bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2
+           text-sm text-[#e2e8f0] transition-colors outline-none
+           focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+    /* placeholder via plain CSS — not @apply */
+  }
+  .admin-input::placeholder {
+    color: #4b5563;
+  }
+
+  /* ── Textarea — does NOT use @apply admin-input (that causes silent failure) ── */
+  .admin-textarea {
+    @apply w-full bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2
+           text-sm text-[#e2e8f0] transition-colors outline-none
+           focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+           resize-none leading-relaxed;
+  }
+  .admin-textarea::placeholder {
+    color: #4b5563;
+  }
+
+  /* ── Label ── */
+  .admin-label {
+    @apply block text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-1.5;
+  }
+
+  /* ── Card ── */
+  .admin-card {
+    @apply bg-[#1a1d27] border border-[#2a2d3e] rounded-xl;
+  }
+
+  /* ── Buttons ── */
+  .admin-btn-primary {
+    @apply inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700
+           text-white text-sm font-semibold px-4 py-2 rounded-lg
+           transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .admin-btn-secondary {
+    @apply inline-flex items-center gap-2 bg-[#2a2d3e] hover:bg-[#323548]
+           text-[#e2e8f0] text-sm font-semibold px-4 py-2 rounded-lg
+           transition-colors;
+  }
+  .admin-btn-danger {
+    @apply inline-flex items-center gap-1.5 bg-red-600/10 hover:bg-red-600/20
+           text-red-400 text-xs font-semibold px-3 py-1.5 rounded-lg
+           transition-colors border border-red-600/20;
+  }
+
+  /* ── Typography ── */
+  .admin-section-title {
+    @apply text-base font-bold text-[#e2e8f0];
+  }
+  .admin-page-title {
+    @apply text-xl font-bold text-[#e2e8f0];
+  }
+
+  /* ── Tabs ── */
+  .tab-active {
+    @apply bg-blue-600 text-white font-medium rounded-lg;
+  }
+  .tab-inactive {
+    @apply text-[#94a3b8] hover:text-white hover:bg-[#2a2d3e] rounded-lg transition-colors;
+  }
+
+}
