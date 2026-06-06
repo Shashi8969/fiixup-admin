@@ -1,14 +1,41 @@
+'use client'
+
 // app/(admin)/page.tsx — Dashboard
 
-import Link             from 'next/link'
-import { getServerClient } from '@/lib/supabase-server'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { getBrowserClient } from '@/lib/supabase'
 import {
   MapPin, Settings, Layers, FileText,
   Package, Globe, ArrowRight, Database,
 } from 'lucide-react'
 
-async function getStats() {
-  const sb = await getServerClient()
+type Stats = {
+  cities: number
+  ls: number
+  csp: number
+  posts: number
+  services: number
+}
+
+const DEFAULT_STATS: Stats = {
+  cities: 0,
+  ls: 0,
+  csp: 0,
+  posts: 0,
+  services: 0,
+}
+
+const NAV_CARDS = [
+  { href: '/cities',              icon: MapPin,     label: 'Cities',               desc: 'Edit city hub pages, hero copy, areas, testimonials & FAQs'  },
+  { href: '/location-services',  icon: Settings,   label: 'Location Services',    desc: 'Edit pricing, FAQs, testimonials, nearby areas per service'   },
+  { href: '/city-service-pages', icon: Layers,     label: 'City Service Pages',   desc: 'Edit category pages (battery, tyre, oil-change per city)'     },
+  { href: '/posts',              icon: FileText,   label: 'Blog Posts',           desc: 'Edit post content, SEO meta, featured status'                 },
+  { href: '/services',           icon: Package,    label: 'Services',             desc: 'Edit global service catalogue, pricing, brands & FAQs'        },
+]
+
+async function getStats(): Promise<Stats> {
+  const sb = getBrowserClient()
 
   const [cities, ls, csp, posts, services] = await Promise.all([
     sb.from('cities').select('id', { count: 'exact', head: true }),
@@ -27,24 +54,32 @@ async function getStats() {
   }
 }
 
-const NAV_CARDS = [
-  { href: '/cities',              icon: MapPin,     label: 'Cities',               desc: 'Edit city hub pages, hero copy, areas, testimonials & FAQs'  },
-  { href: '/location-services',  icon: Settings,   label: 'Location Services',    desc: 'Edit pricing, FAQs, testimonials, nearby areas per service'   },
-  { href: '/city-service-pages', icon: Layers,     label: 'City Service Pages',   desc: 'Edit category pages (battery, tyre, oil-change per city)'     },
-  { href: '/posts',              icon: FileText,   label: 'Blog Posts',           desc: 'Edit post content, SEO meta, featured status'                 },
-  { href: '/services',           icon: Package,    label: 'Services',             desc: 'Edit global service catalogue, pricing, brands & FAQs'        },
-]
+export default function DashboardPage() {
+  const [stats, setStats] = useState<Stats>(DEFAULT_STATS)
 
-export default async function DashboardPage() {
-  const stats = await getStats()
+  useEffect(() => {
+    let active = true
 
-  const STAT_CARDS = [
+    getStats()
+      .then((nextStats) => {
+        if (active) setStats(nextStats)
+      })
+      .catch(() => {
+        if (active) setStats(DEFAULT_STATS)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const STAT_CARDS = useMemo(() => [
     { label: 'Cities',            value: stats.cities,   icon: Globe    },
     { label: 'Location Services', value: stats.ls,       icon: Settings },
     { label: 'City Svc Pages',    value: stats.csp,      icon: Layers   },
     { label: 'Blog Posts',        value: stats.posts,    icon: FileText },
     { label: 'Services',          value: stats.services, icon: Package  },
-  ]
+  ], [stats])
 
   return (
     <div className="space-y-8">

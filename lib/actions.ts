@@ -21,8 +21,12 @@ async function revalidateMainSite(paths: string[]) {
   const siteUrl = process.env.MAIN_SITE_URL ?? 'https://fiixup.in'
   if (!secret) return
 
+  // Keep admin saves light: remove duplicate paths and avoid firing many requests
+  // when one editor save touches the same parent page repeatedly.
+  const uniquePaths = Array.from(new Set(paths.filter(Boolean))).slice(0, 8)
+
   await Promise.allSettled(
-    paths.map((path) =>
+    uniquePaths.map((path) =>
       fetch(`${siteUrl}/api/revalidate?secret=${secret}&path=${encodeURIComponent(path)}`, {
         method: 'POST',
         cache:  'no-store',
@@ -496,4 +500,105 @@ export async function saveService(
   if (error) return { success: false, error: error.message }
   await revalidateMainSite([`/services/${serviceSlug}`, '/services'])
   return { success: true, message: 'Service saved.' }
+}
+
+type RedirectInput = {
+  source: string
+  destination: string
+  is_permanent: boolean
+  is_active: boolean
+  note?: string
+}
+
+type RedirectRecord = {
+  id: string
+  source: string
+  destination: string
+  is_permanent: boolean | null
+  is_active: boolean | null
+  note: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export type RedirectListResult =
+  | { success: true; redirects: RedirectRecord[]; error?: never }
+  | { success: false; error: string; redirects?: never }
+
+function normalizeRedirectPath(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return trimmed
+  if (trimmed.startsWith('/') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
+  return `/${trimmed}`
+}
+
+function normalizeRedirectInput(data: RedirectInput) {
+  return {
+    source: normalizeRedirectPath(data.source),
+    destination: normalizeRedirectPath(data.destination),
+    is_permanent: Boolean(data.is_permanent),
+    is_active: Boolean(data.is_active),
+    note: data.note?.trim() || null,
+  }
+}
+
+export async function listRedirects(): Promise<RedirectListResult> {
+  const sb = getServiceClient()
+  const { data, error } = await sb
+    .from('redirects')
+    .select('id,source,destination,is_permanent,is_active,note,created_at,updated_at')
+    .order('updated_at', { ascending: false })
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, redirects: (data ?? []) as RedirectRecord[] }
+}
+
+export async function createRedirect(data: RedirectInput): Promise<ActionResult> {
+  const payload = normalizeRedirectInput(data)
+
+  if (!payload.source || !payload.destination) {
+    return { success: false, error: 'Source and destination are required.' }
+  }
+
+  if (payload.source === payload.destination) {
+    return { success: false, error: 'Source and destination cannot be the same.' }
+  }
+
+  const sb = getServiceClient()
+  const { error } = await sb.from('redirects').insert(payload)
+
+  if (error) return { success: false, error: error.message }
+  await revalidateMainSite([payload.source])
+  return { success: true, message: 'Redirect created.' }
+}
+
+export async function updateRedirect(id: string, data: RedirectInput): Promise<ActionResult> {
+  const payload = normalizeRedirectInput(data)
+
+  if (!payload.source || !payload.destination) {
+    return { success: false, error: 'Source and destination are required.' }
+  }
+
+  if (payload.source === payload.destination) {
+    return { success: false, error: 'Source and destination cannot be the same.' }
+  }
+
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('redirects')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+  await revalidateMainSite([payload.source])
+  return { success: true, message: 'Redirect saved.' }
+}
+
+export async function deleteRedirect(id: string, source: string): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('redirects').delete().eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+  await revalidateMainSite([source])
+  return { success: true, message: 'Redirect deleted.' }
 }

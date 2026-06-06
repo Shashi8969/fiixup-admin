@@ -9,48 +9,25 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast }        from '@/components/ui/Toast'
 import {
-  Upload, FolderOpen, Image as ImageIcon, X, Check,
-  Loader2, Trash2, Copy, Search, RefreshCw, Edit2, Save,
-  ExternalLink, Grid, List,
+  Upload, FolderOpen, Image as ImageIcon, Check,
+  Loader2, Search, RefreshCw, Grid, List,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-
-// ── Folder definitions ────────────────────────────────────────────────────────
-const FOLDERS = [
-  { id: 'all',              label: 'All Images',        color: 'blue'   },
-  { id: 'cities',           label: 'Cities',            color: 'green'  },
-  { id: 'services',         label: 'Services',          color: 'purple' },
-  { id: 'blog',             label: 'Blog',              color: 'amber'  },
-  { id: 'location-services',label: 'Location Services', color: 'teal'   },
-  { id: 'og',               label: 'OG Images',         color: 'orange' },
-  { id: 'team',             label: 'Team',              color: 'pink'   },
-  { id: 'general',          label: 'General',           color: 'gray'   },
-] as const
-
-type FolderId = typeof FOLDERS[number]['id']
+import { FOLDERS, type FolderId, type MediaItem, type UploadForm, type WebpUploadSettings } from '@/components/media/types'
+import { MediaDetailsPanel } from '@/components/media/MediaDetailsPanel'
+import { MediaUploadModal } from '@/components/media/MediaUploadModal'
+import { formatSize } from '@/utils/media/formatSize'
+import {
+  cleanFileBaseName,
+  compressImageToWebp,
+  DEFAULT_WEBP_COMPRESSION_SETTINGS,
+  getFileExtension,
+  type PreparedImageUpload,
+} from '@/utils/media/webpCompressor'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const BUCKET_PUBLIC_URL = `${SUPABASE_URL}/storage/v1/object/public/images`
-
-type MediaItem = {
-  id:              string
-  storage_path:    string
-  public_url:      string
-  folder:          string
-  file_name:       string
-  file_size:       number | null
-  mime_type:       string | null
-  width:           number | null
-  height:          number | null
-  title:           string | null
-  description:     string | null
-  alt_text:        string | null
-  meta_title:      string | null
-  meta_description:string | null
-  caption:         string | null
-  tags:            string[]
-  created_at:      string
-}
+const MAX_UPLOAD_SIZE = 52428800
 
 export default function MediaLibraryPage() {
   const sb = getBrowserClient()
@@ -68,10 +45,12 @@ export default function MediaLibraryPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Upload form state
-  const [uploadForm, setUploadForm] = useState({
+  const [uploadForm, setUploadForm] = useState<UploadForm>({
     title: '', alt_text: '', description: '',
     meta_title: '', meta_description: '', caption: '', tags: '',
   })
+
+  const [webpSettings, setWebpSettings] = useState<WebpUploadSettings>(DEFAULT_WEBP_COMPRESSION_SETTINGS)
 
   // Edit metadata state
   const [editing,    setEditing]    = useState(false)
@@ -92,61 +71,98 @@ export default function MediaLibraryPage() {
 
   useEffect(() => { fetchItems() }, [fetchItems])
 
-  // ── Upload handler ─────────────────────────────────────────────────────────
+  const buildUniqueStoragePath = useCallback(async (fileName: string) => {
+    const ext = getFileExtension(fileName)
+    const base = cleanFileBaseName(fileName)
+
+    for (let i = 1; i <= 20; i++) {
+      const finalName = i === 1 ? `${base}.${ext}` : `${base}-${i}.${ext}`
+      const path = `${uploadFolder}/${finalName}`
+      const { data } = await sb
+        .from('media_library')
+        .select('id')
+        .eq('storage_path', path)
+        .maybeSingle()
+
+      if (!data) return path
+    }
+
+    return `${uploadFolder}/${base}-${Date.now()}.${ext}`
+  }, [uploadFolder])
+
+  // ── Upload handler with optional PNG/JPG → WebP compression ────────────────
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
     setUploading(true)
 
-    for (const file of Array.from(files)) {
-      // Validate
-      if (!file.type.startsWith('image/')) {
-        showToast('error', `${file.name} is not an image`)
-        continue
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith('image/')) {
+          showToast('error', `${file.name} is not an image`)
+          continue
+        }
+
+        if (file.size > MAX_UPLOAD_SIZE) {
+          showToast('error', `${file.name} exceeds 50MB limit`)
+          continue
+        }
+
+        let prepared: PreparedImageUpload
+        try {
+          prepared = await compressImageToWebp(file, webpSettings)
+        } catch (error) {
+          showToast('error', error instanceof Error ? error.message : `Could not compress ${file.name}`)
+          continue
+        }
+
+        if (prepared.file.size > MAX_UPLOAD_SIZE) {
+          showToast('error', `${prepared.fileName} exceeds 50MB limit after compression`)
+          continue
+        }
+
+        const path = await buildUniqueStoragePath(prepared.fileName)
+
+        const { error: uploadError } = await sb.storage
+          .from('images')
+          .upload(path, prepared.file, { cacheControl: '3600', upsert: false })
+
+        if (uploadError) { showToast('error', uploadError.message); continue }
+
+        const publicUrl = `${BUCKET_PUBLIC_URL}/${path}`
+
+        const { error: dbError } = await sb.from('media_library').insert({
+          storage_path:     path,
+          public_url:       publicUrl,
+          folder:           uploadFolder,
+          file_name:        path.split('/').pop() ?? prepared.fileName,
+          file_size:        prepared.finalSize,
+          mime_type:        prepared.mimeType,
+          width:            prepared.width,
+          height:           prepared.height,
+          title:            uploadForm.title || prepared.fileName.replace(/\.[^/.]+$/, ''),
+          alt_text:         uploadForm.alt_text,
+          description:      uploadForm.description,
+          meta_title:       uploadForm.meta_title,
+          meta_description: uploadForm.meta_description,
+          caption:          uploadForm.caption,
+          tags:             uploadForm.tags ? uploadForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        })
+
+        if (dbError) {
+          showToast('error', `Metadata error: ${dbError.message}`)
+        } else if (prepared.convertedToWebp) {
+          showToast('success', `${prepared.originalFileName} → ${path.split('/').pop()} uploaded`)
+        } else {
+          showToast('success', `${prepared.fileName} uploaded`)
+        }
       }
-      if (file.size > 52428800) {
-        showToast('error', `${file.name} exceeds 50MB limit`)
-        continue
-      }
-
-      // Generate unique filename
-      const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-      const base = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-      const path = `${uploadFolder}/${base}-${Date.now()}.${ext}`
-
-      // Upload to storage
-      const { error: uploadError } = await sb.storage
-        .from('images')
-        .upload(path, file, { cacheControl: '3600', upsert: false })
-
-      if (uploadError) { showToast('error', uploadError.message); continue }
-
-      const publicUrl = `${BUCKET_PUBLIC_URL}/${path}`
-
-      // Save metadata to media_library
-      const { error: dbError } = await sb.from('media_library').insert({
-        storage_path:     path,
-        public_url:       publicUrl,
-        folder:           uploadFolder,
-        file_name:        file.name,
-        file_size:        file.size,
-        mime_type:        file.type,
-        title:            uploadForm.title || file.name.replace(/\.[^/.]+$/, ''),
-        alt_text:         uploadForm.alt_text,
-        description:      uploadForm.description,
-        meta_title:       uploadForm.meta_title,
-        meta_description: uploadForm.meta_description,
-        caption:          uploadForm.caption,
-        tags:             uploadForm.tags ? uploadForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      })
-
-      if (dbError) showToast('error', `Metadata error: ${dbError.message}`)
-      else showToast('success', `${file.name} uploaded`)
+    } finally {
+      setUploading(false)
+      setShowUpload(false)
+      setUploadForm({ title:'', alt_text:'', description:'', meta_title:'', meta_description:'', caption:'', tags:'' })
+      if (fileRef.current) fileRef.current.value = ''
+      fetchItems()
     }
-
-    setUploading(false)
-    setShowUpload(false)
-    setUploadForm({ title:'', alt_text:'', description:'', meta_title:'', meta_description:'', caption:'', tags:'' })
-    fetchItems()
   }
 
   // ── Save metadata edits ────────────────────────────────────────────────────
@@ -167,9 +183,7 @@ export default function MediaLibraryPage() {
   // ── Delete ────────────────────────────────────────────────────────────────
   const deleteItem = async (item: MediaItem) => {
     if (!confirm(`Delete "${item.file_name}"? This cannot be undone.`)) return
-    // Delete from storage
     await sb.storage.from('images').remove([item.storage_path])
-    // Delete from DB
     const { error } = await sb.from('media_library').delete().eq('id', item.id)
     if (error) { showToast('error', error.message); return }
     showToast('success', 'Image deleted')
@@ -325,285 +339,35 @@ export default function MediaLibraryPage() {
 
       {/* ── RIGHT: Image detail panel ── */}
       {selected && (
-        <div className="w-80 flex-shrink-0 bg-[#111827] border-l border-[#1e2535] flex flex-col overflow-hidden">
-
-          {/* Image preview */}
-          <div className="relative bg-[#0f1117] aspect-video flex items-center justify-center flex-shrink-0">
-            <img src={selected.public_url} alt={selected.alt_text ?? ''}
-              className="max-w-full max-h-full object-contain p-2" />
-            <button onClick={() => setSelected(null)}
-              className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-1.5 p-3 border-b border-[#1e2535]">
-            <button onClick={() => copyUrl(selected.public_url)}
-              className="admin-btn-secondary flex-1 justify-center text-xs py-1.5">
-              <Copy className="w-3.5 h-3.5" /> Copy URL
-            </button>
-            <a href={selected.public_url} target="_blank" rel="noopener noreferrer"
-              className="admin-btn-secondary px-2.5 py-1.5">
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-            <button onClick={() => deleteItem(selected)}
-              className="admin-btn-danger px-2.5 py-1.5">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Metadata */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
-
-            {/* File info */}
-            <div className="bg-[#0f1117] rounded-xl p-3 space-y-1.5">
-              <p className="text-[10px] font-bold text-[#6b7280] uppercase tracking-wider">File Info</p>
-              <InfoRow label="Name"   value={selected.file_name} />
-              <InfoRow label="Folder" value={selected.folder} />
-              <InfoRow label="Size"   value={formatSize(selected.file_size)} />
-              <InfoRow label="Type"   value={selected.mime_type ?? '—'} />
-              <InfoRow label="Path"   value={selected.storage_path} mono />
-              <InfoRow label="Uploaded" value={new Date(selected.created_at).toLocaleDateString('en-IN')} />
-            </div>
-
-            {/* Editable metadata */}
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold text-[#6b7280] uppercase tracking-wider">Metadata</p>
-              {!editing ? (
-                <button onClick={() => { setEditing(true); setEditForm(selected) }}
-                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
-                  <Edit2 className="w-3 h-3" /> Edit
-                </button>
-              ) : (
-                <div className="flex gap-1.5">
-                  <button onClick={saveMeta} disabled={savingMeta}
-                    className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300">
-                    {savingMeta ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                    Save
-                  </button>
-                  <button onClick={() => setEditing(false)} className="text-xs text-[#6b7280] hover:text-white">
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {editing ? (
-              <div className="space-y-2.5">
-                {[
-                  { key: 'title',            label: 'Title'            },
-                  { key: 'alt_text',         label: 'Alt Text'         },
-                  { key: 'caption',          label: 'Caption'          },
-                  { key: 'description',      label: 'Description'      },
-                  { key: 'meta_title',       label: 'Meta Title'       },
-                  { key: 'meta_description', label: 'Meta Description' },
-                ].map(f => (
-                  <div key={f.key}>
-                    <label className="admin-label">{f.label}</label>
-                    {f.key === 'description' || f.key === 'meta_description' ? (
-                      <textarea
-                        value={String((editForm as Record<string,unknown>)[f.key] ?? '')}
-                        onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                        rows={2} className="admin-textarea text-xs" />
-                    ) : (
-                      <input type="text"
-                        value={String((editForm as Record<string,unknown>)[f.key] ?? '')}
-                        onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                        className="admin-input text-xs" />
-                    )}
-                  </div>
-                ))}
-                <div>
-                  <label className="admin-label">Tags (comma separated)</label>
-                  <input type="text"
-                    value={Array.isArray((editForm as Record<string,unknown>).tags) ? ((editForm as Record<string,unknown>).tags as string[]).join(', ') : ''}
-                    onChange={e => setEditForm(p => ({ ...p, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))}
-                    className="admin-input text-xs" placeholder="hero, bangalore, mechanic" />
-                </div>
-                <div>
-                  <label className="admin-label">Move to Folder</label>
-                  <select
-                    value={String((editForm as Record<string,unknown>).folder ?? 'general')}
-                    onChange={e => setEditForm(p => ({ ...p, folder: e.target.value }))}
-                    className="admin-input text-xs">
-                    {FOLDERS.filter(f => f.id !== 'all').map(f => (
-                      <option key={f.id} value={f.id}>{f.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <InfoRow label="Title"            value={selected.title} />
-                <InfoRow label="Alt Text"         value={selected.alt_text} />
-                <InfoRow label="Caption"          value={selected.caption} />
-                <InfoRow label="Description"      value={selected.description} />
-                <InfoRow label="Meta Title"       value={selected.meta_title} />
-                <InfoRow label="Meta Description" value={selected.meta_description} />
-                {selected.tags?.length > 0 && (
-                  <div>
-                    <p className="text-[10px] text-[#6b7280] font-semibold uppercase tracking-wider mb-1">Tags</p>
-                    <div className="flex flex-wrap gap-1">
-                      {selected.tags.map(tag => (
-                        <span key={tag} className="text-[10px] bg-[#2a2d3e] text-[#94a3b8] px-2 py-0.5 rounded-full">{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Public URL */}
-            <div>
-              <p className="text-[10px] font-bold text-[#6b7280] uppercase tracking-wider mb-1.5">Public URL</p>
-              <div className="bg-[#0f1117] rounded-lg p-2 flex items-start gap-2">
-                <p className="text-[10px] font-mono text-[#6b7280] flex-1 break-all leading-relaxed">
-                  {selected.public_url}
-                </p>
-                <button onClick={() => copyUrl(selected.public_url)}
-                  className="flex-shrink-0 text-[#6b7280] hover:text-blue-400 transition-colors">
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <MediaDetailsPanel
+          selected={selected}
+          setSelected={setSelected}
+          editing={editing}
+          setEditing={setEditing}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          savingMeta={savingMeta}
+          saveMeta={saveMeta}
+          deleteItem={deleteItem}
+          copyUrl={copyUrl}
+        />
       )}
 
       {/* ── UPLOAD MODAL ── */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-[#111827] border border-[#1e2535] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-[#1e2535]">
-              <h2 className="text-base font-bold text-[#e2e8f0]">Upload Image</h2>
-              <button onClick={() => setShowUpload(false)} className="text-[#6b7280] hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-
-              {/* Folder selector */}
-              <div>
-                <label className="admin-label">Upload to folder</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {FOLDERS.filter(f => f.id !== 'all').map(f => (
-                    <button key={f.id} onClick={() => setUploadFolder(f.id)}
-                      className={clsx(
-                        'px-2 py-2 rounded-lg text-xs font-medium border transition-all text-center',
-                        uploadFolder === f.id
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                          : 'border-[#2a2d3e] text-[#6b7280] hover:border-[#3a3d4e] hover:text-white'
-                      )}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Drop zone */}
-              <div
-                onClick={() => fileRef.current?.click()}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files) }}
-                className="border-2 border-dashed border-[#2a2d3e] hover:border-blue-500 rounded-xl p-8 text-center cursor-pointer transition-colors group">
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-                    <p className="text-sm text-[#6b7280]">Uploading…</p>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 text-[#6b7280] mx-auto mb-2 group-hover:text-blue-400 transition-colors" />
-                    <p className="text-sm font-semibold text-[#e2e8f0]">Click to select or drag & drop</p>
-                    <p className="text-xs text-[#6b7280] mt-1">JPG, PNG, WebP, GIF — max 50MB · Multiple files supported</p>
-                  </>
-                )}
-              </div>
-              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
-                onChange={e => handleUpload(e.target.files)} />
-
-              {/* Metadata fields */}
-              <div className="border-t border-[#1e2535] pt-4 space-y-3">
-                <p className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">Image Metadata (applied to all uploaded images)</p>
-
-                {[
-                  { key: 'title',            label: 'Title',            placeholder: 'Mechanic at work in Bangalore'    },
-                  { key: 'alt_text',         label: 'Alt Text',         placeholder: 'Fiixup mechanic repairing a car'  },
-                  { key: 'caption',          label: 'Caption',          placeholder: 'Doorstep car repair in Bangalore'  },
-                  { key: 'meta_title',       label: 'Meta Title',       placeholder: 'Car Repair Bangalore — Fiixup'     },
-                ].map(f => (
-                  <div key={f.key}>
-                    <label className="admin-label">{f.label}</label>
-                    <input type="text"
-                      value={(uploadForm as Record<string,string>)[f.key]}
-                      onChange={e => setUploadForm(p => ({ ...p, [f.key]: e.target.value }))}
-                      placeholder={f.placeholder} className="admin-input text-sm" />
-                  </div>
-                ))}
-
-                <div>
-                  <label className="admin-label">Description</label>
-                  <textarea
-                    value={uploadForm.description}
-                    onChange={e => setUploadForm(p => ({ ...p, description: e.target.value }))}
-                    rows={2} className="admin-textarea text-sm"
-                    placeholder="Detailed description of the image for SEO" />
-                </div>
-
-                <div>
-                  <label className="admin-label">Meta Description</label>
-                  <textarea
-                    value={uploadForm.meta_description}
-                    onChange={e => setUploadForm(p => ({ ...p, meta_description: e.target.value }))}
-                    rows={2} className="admin-textarea text-sm"
-                    placeholder="SEO meta description for this image page" />
-                </div>
-
-                <div>
-                  <label className="admin-label">Tags (comma separated)</label>
-                  <input type="text"
-                    value={uploadForm.tags}
-                    onChange={e => setUploadForm(p => ({ ...p, tags: e.target.value }))}
-                    placeholder="bangalore, mechanic, car-repair" className="admin-input text-sm" />
-                </div>
-              </div>
-
-              {/* Submit */}
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="admin-btn-primary w-full justify-center">
-                {uploading
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
-                  : <><Upload className="w-4 h-4" /> Select & Upload Images</>
-                }
-              </button>
-            </div>
-          </div>
-        </div>
+        <MediaUploadModal
+          fileRef={fileRef}
+          uploadFolder={uploadFolder}
+          setUploadFolder={setUploadFolder}
+          uploadForm={uploadForm}
+          setUploadForm={setUploadForm}
+          webpSettings={webpSettings}
+          setWebpSettings={setWebpSettings}
+          uploading={uploading}
+          onClose={() => setShowUpload(false)}
+          onUpload={handleUpload}
+        />
       )}
     </div>
   )
-}
-
-// ── Helper components ──────────────────────────────────────────────────────────
-function InfoRow({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
-  if (!value) return null
-  return (
-    <div>
-      <p className="text-[10px] text-[#6b7280] font-semibold uppercase tracking-wider">{label}</p>
-      <p className={clsx('text-xs text-[#e2e8f0] mt-0.5 break-all', mono && 'font-mono text-[#6b7280]')}>{value}</p>
-    </div>
-  )
-}
-
-function formatSize(bytes: number | null): string {
-  if (!bytes) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

@@ -4,9 +4,12 @@
 
 import { useEffect, useState } from 'react'
 import { useParams }           from 'next/navigation'
-import Link                    from 'next/link'
 import { getBrowserClient }    from '@/lib/supabase'
 import { Field }               from '@/components/ui/Field'
+import { SeoMetaPanel }        from '@/components/seo/SeoMetaPanel'
+import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
+import { AdminBackButton }     from '@/components/navigation/AdminBackButton'
+import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { ChildTableEditor }    from '@/components/editors/ChildTableEditor'
 import { showToast }           from '@/components/ui/Toast'
 import { saveService }         from '@/lib/actions'
@@ -16,7 +19,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-const TABS = ['SEO', 'Details', 'Pricing', 'Features', 'FAQs', 'Testimonials', 'Brands'] as const
+const TABS = ['SEO', 'Schema', 'Details', 'Pricing', 'Features', 'FAQs', 'Testimonials', 'Brands'] as const
 type Tab = typeof TABS[number]
 
 export default function ServiceEditorPage() {
@@ -59,12 +62,19 @@ export default function ServiceEditorPage() {
   )
   if (!svc) return <div className="text-red-400 p-8">Service not found: {serviceSlug}</div>
 
-  const save = (col: string) => async (val: string) => {
+  const save = (col: string) => async (val: unknown) => {
     const result = await saveService(String(svc.id), serviceSlug, { [col]: val })
     if (!result.success) return result
     setSvc((p) => p ? { ...p, [col]: val } : p)
     showToast('success', result.message)
     return result
+  }
+
+  const savePatch = async (patch: Record<string, unknown>) => {
+    const result = await saveService(String(svc.id), serviceSlug, patch)
+    if (!result.success) return result
+    setSvc((p) => p ? { ...p, ...patch } : p)
+    return { success: true, message: 'Schema saved and live site updated.' }
   }
 
   const saveJson = async (col: string, val: string) => {
@@ -130,9 +140,9 @@ export default function ServiceEditorPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Link href="/services" className="p-2 rounded-lg hover:bg-[#2a2d3e] transition-colors text-[#6b7280]">
+          <AdminBackButton fallbackHref="/services" className="p-2 rounded-lg hover:bg-[#2a2d3e] transition-colors text-[#6b7280]">
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </AdminBackButton>
           <div>
             <h1 className="admin-page-title flex items-center gap-2">
               <Package className="w-5 h-5 text-blue-400" />
@@ -167,13 +177,29 @@ export default function ServiceEditorPage() {
 
       {/* ── SEO ── */}
       {tab === 'SEO' && (
-        <div className="admin-card p-6 space-y-5">
-          <h2 className="admin-section-title">SEO Meta</h2>
-          <Field label="Meta Title"       value={String(svc.meta_title ?? '')}       onSave={save('meta_title')} />
-          <Field label="Meta Description" value={String(svc.meta_description ?? '')} onSave={save('meta_description')} multiline rows={3} />
-          <Field label="Meta Keywords"    value={String(svc.meta_keywords ?? '')}    onSave={save('meta_keywords')} multiline rows={2} />
-          <Field label="OG Image URL"     value={String(svc.og_image_url ?? '')}     onSave={save('og_image_url')} />
-        </div>
+        <SeoMetaPanel
+          title={String(svc.meta_title ?? '')}
+          description={String(svc.meta_description ?? '')}
+          keywords={String(svc.meta_keywords ?? '')}
+          urlPath={`/services/${serviceSlug}`}
+          onSaveTitle={save('meta_title')}
+          onSaveDescription={save('meta_description')}
+          onSaveKeywords={save('meta_keywords')}
+          extraFields={<Field label="OG Image URL" value={String(svc.og_image_url ?? '')} onSave={save('og_image_url')} />}
+        />
+      )}
+
+      {/* ── Schema ── */}
+      {tab === 'Schema' && (
+        <SchemaMultiSelector
+          kind="service"
+          record={svc}
+          urlPath={`/services/${serviceSlug}`}
+          faqs={svcFaqs}
+          selectedTypes={(Array.isArray(svc.schema_types) ? svc.schema_types : undefined) as SchemaEntityType[] | undefined}
+          overrides={(svc.schema_overrides && typeof svc.schema_overrides === 'object' ? svc.schema_overrides : {}) as Record<string, unknown>}
+          onSave={savePatch}
+        />
       )}
 
       {/* ── Details ── */}

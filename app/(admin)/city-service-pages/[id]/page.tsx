@@ -9,6 +9,10 @@ import { useParams }        from 'next/navigation'
 import Link                 from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }            from '@/components/ui/Field'
+import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
+import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
+import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
+import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
 import {
   saveCityServicePage,
@@ -22,11 +26,23 @@ import {
   ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import {
+  AddRowBtn,
+  ChildRow,
+  DirectAddBtn,
+  DirectChildRow,
+  Empty,
+  JsonField,
+  SectionHeader,
+  Toggle,
+  s,
+} from '@/components/city-service-pages/editor/CityServicePageEditorParts'
 
 // ── Tabs — covers every table ──────────────────────────────────────────────────
 const TABS = [
   { id: 'seo',         label: 'SEO'          },
   { id: 'hero',        label: 'Hero'         },
+  { id: 'schema',      label: 'Schema'       },
   { id: 'about',       label: 'About'        },
   { id: 'json',        label: 'JSON Fields'  },
   { id: 'pricing',     label: 'Pricing'      },
@@ -97,7 +113,7 @@ export default function CspEditorPage() {
   const liveUrl      = `https://fiixup.in/${citySlug}/services/${categorySlug}`
 
   // ── Save helpers ───────────────────────────────────────────────────────────
-  const save = (field: string) => async (val: string) => {
+  const save = (field: string) => async (val: unknown) => {
     const r = await saveCityServicePage(cspId, citySlug, categorySlug, { [field]: val })
     if (r.success) { setCsp(p => p ? { ...p, [field]: val } : p); showToast('success', r.message) }
     else showToast('error', r.error)
@@ -115,6 +131,12 @@ export default function CspEditorPage() {
     if (r.success) { setCsp(p => p ? { ...p, [field]: val } : p); showToast('success', r.message) }
     else showToast('error', r.error)
   }
+  const savePatch = async (patch: Record<string, unknown>) => {
+    const r = await saveCityServicePage(cspId, citySlug, categorySlug, patch)
+    if (r.success) setCsp(p => p ? { ...p, ...patch } : p)
+    return r
+  }
+
   const saveJson = (field: string) => async (val: string) => {
     try {
       const parsed = JSON.parse(val)
@@ -131,10 +153,10 @@ export default function CspEditorPage() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <Link href={`/cities/${citySlug}`}
+          <AdminBackButton fallbackHref={`/cities/${citySlug}`}
             className="p-2 rounded-lg hover:bg-[#2a2d3e] text-[#6b7280] hover:text-white transition-colors">
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </AdminBackButton>
           <div>
             <h1 className="admin-page-title flex items-center gap-2">
               <Layers className="w-5 h-5 text-amber-400" />
@@ -207,18 +229,38 @@ export default function CspEditorPage() {
 
       {/* ════════════ SEO ════════════ */}
       {tab === 'seo' && (
-        <div className="admin-card p-6 space-y-4">
-          <h2 className="admin-section-title">SEO Meta</h2>
-          <Field label="Meta Title"        value={s(csp.meta_title)}        onSave={save('meta_title')} />
-          <Field label="Meta Description"  value={s(csp.meta_description)}  onSave={save('meta_description')} multiline rows={3} />
-          <Field label="Meta Keywords"     value={s(csp.meta_keywords)}     onSave={save('meta_keywords')} multiline rows={2} />
-          <Field label="Canonical URL"     value={s(csp.canonical_url)}     onSave={save('canonical_url')} />
-          <Field label="OG Image URL"      value={s(csp.og_image_url)}      onSave={save('og_image_url')} />
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Schema Rating"       value={s(csp.schema_aggregate_rating)} numeric onSave={saveNum('schema_aggregate_rating')} />
-            <Field label="Schema Review Count" value={s(csp.schema_review_count)}     numeric onSave={saveNum('schema_review_count')} />
-          </div>
-        </div>
+        <SeoMetaPanel
+          title={s(csp.meta_title)}
+          description={s(csp.meta_description)}
+          keywords={s(csp.meta_keywords)}
+          urlPath={`/${citySlug}/services/${categorySlug}`}
+          onSaveTitle={save('meta_title')}
+          onSaveDescription={save('meta_description')}
+          onSaveKeywords={save('meta_keywords')}
+          extraFields={
+            <>
+              <Field label="Canonical URL" value={s(csp.canonical_url)} onSave={save('canonical_url')} />
+              <Field label="OG Image URL"  value={s(csp.og_image_url)}  onSave={save('og_image_url')} />
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Schema Rating"       value={s(csp.schema_aggregate_rating)} numeric onSave={saveNum('schema_aggregate_rating')} />
+                <Field label="Schema Review Count" value={s(csp.schema_review_count)}     numeric onSave={saveNum('schema_review_count')} />
+              </div>
+            </>
+          }
+        />
+      )}
+
+      {/* ════════════ SCHEMA ════════════ */}
+      {tab === 'schema' && (
+        <SchemaMultiSelector
+          kind="cityServicePage"
+          record={csp}
+          urlPath={`/${citySlug}/services/${categorySlug}`}
+          faqs={faqs}
+          selectedTypes={(Array.isArray(csp.schema_types) ? csp.schema_types : undefined) as SchemaEntityType[] | undefined}
+          overrides={(csp.schema_overrides && typeof csp.schema_overrides === 'object' ? csp.schema_overrides : {}) as Record<string, unknown>}
+          onSave={savePatch}
+        />
       )}
 
       {/* ════════════ HERO ════════════ */}
@@ -524,278 +566,3 @@ export default function CspEditorPage() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function s(v: unknown): string {
-  if (v === null || v === undefined) return ''
-  if (typeof v === 'object') return JSON.stringify(v, null, 2)
-  return String(v)
-}
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-[#6b7280] text-sm italic py-3 px-1">{children}</p>
-}
-function SectionHeader({ title, count, children }: {
-  title: string; count: number; children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <h2 className="admin-section-title">
-        {title}
-        <span className="ml-2 text-xs bg-[#2a2d3e] text-[#94a3b8] px-2 py-0.5 rounded-full font-normal">{count}</span>
-      </h2>
-      {children}
-    </div>
-  )
-}
-function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <button onClick={() => onChange(!value)}
-        className={clsx('relative w-8 h-4 rounded-full transition-colors',
-          value ? 'bg-blue-600' : 'bg-[#2a2d3e]')}>
-        <span className={clsx('absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform',
-          value ? 'translate-x-4' : 'translate-x-0.5')} />
-      </button>
-      <span className="text-xs text-[#6b7280]">{label}</span>
-    </div>
-  )
-}
-
-// ── JSON field editor ──────────────────────────────────────────────────────────
-function JsonField({ label, hint, value, onSave }: {
-  label: string; hint: string; value: unknown
-  onSave: (v: string) => Promise<{ success: boolean; error?: string }>
-}) {
-  const [text, setText] = useState(JSON.stringify(value ?? [], null, 2))
-  const [err,  setErr]  = useState('')
-  const [busy, setBusy] = useState(false)
-  const save = async () => {
-    try { JSON.parse(text); setErr('') }
-    catch { setErr('Invalid JSON'); return }
-    setBusy(true)
-    const r = await onSave(text)
-    setBusy(false)
-    if (!r.success) setErr(r.error ?? 'Error')
-  }
-  return (
-    <div className="space-y-1.5">
-      <label className="admin-label">{label}</label>
-      <p className="text-xs text-[#475569] font-mono mb-1">Format: {hint}</p>
-      <textarea value={text} onChange={e => setText(e.target.value)}
-        rows={7} className="admin-textarea font-mono text-xs" spellCheck={false} />
-      {err && <p className="text-red-400 text-xs">{err}</p>}
-      <button onClick={save} disabled={busy} className="admin-btn-primary">
-        {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Save JSON
-      </button>
-    </div>
-  )
-}
-
-// ── Expandable child row (uses Server Actions) ─────────────────────────────────
-function ChildRow({ row, preview, fields, onSave, onDelete }: {
-  row: Row; preview: string
-  fields: { key: string; label: string; type: 'text'|'textarea'|'number'|'boolean' }[]
-  onSave:   (id: string, data: Record<string, unknown>) => Promise<{ success: boolean; error?: string; message?: string }>
-  onDelete: (id: string) => Promise<{ success: boolean; error?: string; message?: string }>
-}) {
-  const [open,   setOpen]   = useState(false)
-  const [form,   setForm]   = useState<Record<string, string>>(
-    Object.fromEntries(fields.map(f => [f.key, f.type === 'boolean' ? String(Boolean(row[f.key])) : s(row[f.key])]))
-  )
-  const [saving, setSaving] = useState(false)
-
-  const save = async () => {
-    setSaving(true)
-    const payload: Record<string, unknown> = {}
-    fields.forEach(f => {
-      if (f.type === 'number')  payload[f.key] = parseFloat(form[f.key]) || 0
-      else if (f.type === 'boolean') payload[f.key] = form[f.key] === 'true'
-      else payload[f.key] = form[f.key]
-    })
-    await onSave(s(row.id), payload)
-    setSaving(false)
-    setOpen(false)
-  }
-
-  const del = async () => {
-    if (!confirm('Delete this row?')) return
-    await onDelete(s(row.id))
-  }
-
-  return (
-    <div className="admin-card overflow-hidden">
-      <button onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1e2133] transition-colors text-left">
-        {open ? <ChevronDown className="w-4 h-4 text-[#6b7280] flex-shrink-0" />
-               : <ChevronRight className="w-4 h-4 text-[#6b7280] flex-shrink-0" />}
-        <span className="flex-1 text-sm text-[#e2e8f0] truncate">{preview}</span>
-      </button>
-      {open && (
-        <div className="px-4 pb-4 border-t border-[#2a2d3e] pt-4 space-y-3">
-          {fields.map(f => (
-            f.type === 'textarea' ? (
-              <div key={f.key}>
-                <label className="admin-label">{f.label}</label>
-                <textarea value={form[f.key]} onChange={e => setForm(p => ({...p,[f.key]:e.target.value}))}
-                  rows={4} className="admin-textarea" />
-              </div>
-            ) : f.type === 'boolean' ? (
-              <div key={f.key} className="flex items-center gap-3">
-                <span className="admin-label mb-0">{f.label}</span>
-                <Toggle value={form[f.key]==='true'} onChange={v=>setForm(p=>({...p,[f.key]:String(v)}))} label="" />
-              </div>
-            ) : (
-              <div key={f.key}>
-                <label className="admin-label">{f.label}</label>
-                <input type={f.type === 'number' ? 'number' : 'text'} value={form[f.key]}
-                  onChange={e => setForm(p => ({...p,[f.key]:e.target.value}))} className="admin-input" />
-              </div>
-            )
-          ))}
-          <div className="flex gap-2 pt-1">
-            <button onClick={save} disabled={saving} className="admin-btn-primary">
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
-            </button>
-            <button onClick={del} className="admin-btn-danger"><Trash2 className="w-3.5 h-3.5" /> Delete</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Add button using Server Actions ────────────────────────────────────────────
-function AddRowBtn({ fields, onAdd }: {
-  fields: { key: string; label: string; type: 'text'|'textarea'|'number'; required?: boolean }[]
-  onAdd: (data: Record<string, unknown>) => Promise<{ success: boolean; error?: string; message?: string }>
-}) {
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState<Record<string,string>>(Object.fromEntries(fields.map(f=>[f.key,''])))
-  const [busy, setBusy] = useState(false)
-  const add = async () => {
-    setBusy(true)
-    const payload: Record<string,unknown> = {}
-    fields.forEach(f => { payload[f.key] = f.type==='number' ? (parseFloat(form[f.key])||0) : form[f.key] })
-    await onAdd(payload)
-    setBusy(false)
-    setForm(Object.fromEntries(fields.map(f=>[f.key,''])))
-    setOpen(false)
-  }
-  return (
-    <div>
-      <button onClick={() => setOpen(!open)} className="admin-btn-primary"><Plus className="w-4 h-4" /> Add</button>
-      {open && (
-        <div className="admin-card p-4 mt-3 space-y-3 border-dashed">
-          {fields.map(f => f.type==='textarea'
-            ? (<div key={f.key}><label className="admin-label">{f.label}{f.required&&' *'}</label>
-                <textarea value={form[f.key]} onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} rows={3} className="admin-textarea" /></div>)
-            : (<div key={f.key}><label className="admin-label">{f.label}{f.required&&' *'}</label>
-                <input type={f.type==='number'?'number':'text'} value={form[f.key]}
-                  onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} className="admin-input" /></div>)
-          )}
-          <div className="flex gap-2">
-            <button onClick={add} disabled={busy} className="admin-btn-primary">
-              {busy?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:<Plus className="w-3.5 h-3.5"/>} Add Row
-            </button>
-            <button onClick={()=>setOpen(false)} className="admin-btn-secondary">Cancel</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Direct Supabase add (for csp_related_services — no server action needed) ───
-function DirectAddBtn({ table, parentKey, parentId, fields, onAdded }: {
-  table: string; parentKey: string; parentId: string
-  fields: { key: string; label: string; type: 'text'|'number'; required?: boolean }[]
-  onAdded: () => void
-}) {
-  const sb = getBrowserClient()
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState<Record<string,string>>(Object.fromEntries(fields.map(f=>[f.key,''])))
-  const [busy, setBusy] = useState(false)
-  const add = async () => {
-    setBusy(true)
-    const payload: Record<string,unknown> = { [parentKey]: parentId }
-    fields.forEach(f => { payload[f.key] = f.type==='number'?(parseFloat(form[f.key])||0):form[f.key] })
-    const { error } = await sb.from(table).insert(payload)
-    setBusy(false)
-    if (error) { showToast('error', error.message); return }
-    showToast('success', 'Added')
-    setForm(Object.fromEntries(fields.map(f=>[f.key,''])))
-    setOpen(false)
-    onAdded()
-  }
-  return (
-    <div>
-      <button onClick={() => setOpen(!open)} className="admin-btn-primary"><Plus className="w-4 h-4" /> Add</button>
-      {open && (
-        <div className="admin-card p-4 mt-3 space-y-3 border-dashed">
-          {fields.map(f => (
-            <div key={f.key}><label className="admin-label">{f.label}{f.required&&' *'}</label>
-              <input type={f.type==='number'?'number':'text'} value={form[f.key]}
-                onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} className="admin-input" /></div>
-          ))}
-          <div className="flex gap-2">
-            <button onClick={add} disabled={busy} className="admin-btn-primary">
-              {busy?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:<Plus className="w-3.5 h-3.5"/>} Add
-            </button>
-            <button onClick={()=>setOpen(false)} className="admin-btn-secondary">Cancel</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Direct Supabase child row (for csp_related_services) ──────────────────────
-function DirectChildRow({ row, table, preview, fields, onSave }: {
-  row: Row; table: string; preview: string
-  fields: { key: string; label: string; type: 'text'|'number' }[]
-  onSave: () => void
-}) {
-  const sb = getBrowserClient()
-  const [open,   setOpen]   = useState(false)
-  const [form,   setForm]   = useState<Record<string,string>>(
-    Object.fromEntries(fields.map(f=>[f.key, s(row[f.key])]))
-  )
-  const [saving, setSaving] = useState(false)
-  const save = async () => {
-    setSaving(true)
-    const payload: Record<string,unknown> = {}
-    fields.forEach(f => { payload[f.key] = f.type==='number'?(parseFloat(form[f.key])||0):form[f.key] })
-    const { error } = await sb.from(table).update(payload).eq('id', row.id)
-    setSaving(false)
-    if (error) { showToast('error', error.message); return }
-    showToast('success', 'Saved'); onSave(); setOpen(false)
-  }
-  const del = async () => {
-    if (!confirm('Delete?')) return
-    const { error } = await sb.from(table).delete().eq('id', row.id)
-    if (error) { showToast('error', error.message); return }
-    showToast('success', 'Deleted'); onSave()
-  }
-  return (
-    <div className="admin-card overflow-hidden">
-      <button onClick={()=>setOpen(!open)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1e2133] transition-colors text-left">
-        {open?<ChevronDown className="w-4 h-4 text-[#6b7280]"/>:<ChevronRight className="w-4 h-4 text-[#6b7280]"/>}
-        <span className="flex-1 text-sm text-[#e2e8f0] truncate">{preview}</span>
-      </button>
-      {open && (
-        <div className="px-4 pb-4 border-t border-[#2a2d3e] pt-4 space-y-3">
-          {fields.map(f=>(
-            <div key={f.key}><label className="admin-label">{f.label}</label>
-              <input type={f.type==='number'?'number':'text'} value={form[f.key]}
-                onChange={e=>setForm(p=>({...p,[f.key]:e.target.value}))} className="admin-input" /></div>
-          ))}
-          <div className="flex gap-2 pt-1">
-            <button onClick={save} disabled={saving} className="admin-btn-primary">
-              {saving?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:<Save className="w-3.5 h-3.5"/>} Save
-            </button>
-            <button onClick={del} className="admin-btn-danger"><Trash2 className="w-3.5 h-3.5"/> Delete</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
