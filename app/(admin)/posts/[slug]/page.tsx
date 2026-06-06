@@ -19,6 +19,8 @@ import {
   SeoTab,
   SettingsTab,
 } from '@/components/posts/editor/PostEditorSections'
+import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import { publicSiteUrl } from '@/lib/public-site'
 
 export default function PostEditorPage() {
   const params   = useParams()
@@ -29,7 +31,6 @@ export default function PostEditorPage() {
   const [loading,    setLoading]    = useState(true)
   const [blocks,     setBlocks]     = useState<Block[]>([])
   const [saving,     setSaving]     = useState(false)
-  const [preview,    setPreview]    = useState(false)
   const [schemaType, setSchemaType] = useState<SchemaType>('BlogPosting')
   const [overrides,  setOverrides]  = useState<Record<string, string>>({})
 
@@ -97,7 +98,7 @@ export default function PostEditorPage() {
     else showToast('error', result.error ?? 'Save failed')
   }
 
-  const liveUrl = `https://fiixup.in/blog/${postSlug}`
+  const liveUrl = publicSiteUrl(`/blog/${postSlug}`)
   const toggleFeatured = () => saveBool('featured', !post.featured)
 
   return (
@@ -126,11 +127,25 @@ export default function PostEditorPage() {
           post={post}
           blocks={blocks}
           setBlocks={setBlocks}
-          preview={preview}
-          setPreview={setPreview}
           saving={saving}
           saveBlocks={saveBlocks}
           save={save}
+        />
+      )}
+
+      {tab === 'Preview' && (
+        <LivePagePreview
+          title={`Blog preview — ${String(post.title ?? postSlug)}`}
+          url={liveUrl}
+          description="Loads the real Fiixup blog page from the main website, so typography, spacing, CTA, author card, related posts and block rendering match the frontend. Save your latest changes before refreshing the preview."
+        />
+      )}
+
+      {tab === 'Preview' && (
+        <LivePagePreview
+          title={`Blog preview — ${String(post.title ?? postSlug)}`}
+          url={liveUrl}
+          description="Loads the real Fiixup blog page from the main website, so typography, spacing, CTA, author card, related posts and block rendering match the frontend. Save your latest changes before refreshing the preview."
         />
       )}
 

@@ -12,6 +12,8 @@ import { Field }            from '@/components/ui/Field'
 import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
+import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
 import {
@@ -41,6 +43,7 @@ import {
 // ── Tabs — covers every table ──────────────────────────────────────────────────
 const TABS = [
   { id: 'seo',         label: 'SEO'          },
+  { id: 'preview',     label: 'Preview'      },
   { id: 'hero',        label: 'Hero'         },
   { id: 'schema',      label: 'Schema'       },
   { id: 'about',       label: 'About'        },
@@ -110,7 +113,7 @@ export default function CspEditorPage() {
 
   const citySlug     = s(csp.city_slug)
   const categorySlug = s(csp.category_slug)
-  const liveUrl      = `https://fiixup.in/${citySlug}/services/${categorySlug}`
+  const liveUrl      = publicSiteUrl(`/${citySlug}/services/${categorySlug}`)
 
   // ── Save helpers ───────────────────────────────────────────────────────────
   const save = (field: string) => async (val: unknown) => {
@@ -247,6 +250,24 @@ export default function CspEditorPage() {
               </div>
             </>
           }
+        />
+      )}
+
+      {/* ════════════ PREVIEW ════════════ */}
+      {tab === 'preview' && (
+        <LivePagePreview
+          title={`City service preview — ${s(csp.category_title) || categorySlug}`}
+          url={liveUrl}
+          description="Loads the real Fiixup city-service category frontend page. Save changes first, then reload the preview to check the frontend design."
+        />
+      )}
+
+      {/* ════════════ PREVIEW ════════════ */}
+      {tab === 'preview' && (
+        <LivePagePreview
+          title={`City service preview — ${s(csp.category_title) || categorySlug}`}
+          url={liveUrl}
+          description="Loads the real Fiixup city-service category frontend page. Save changes first, then reload the preview to check the frontend design."
         />
       )}
 

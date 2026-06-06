@@ -15,10 +15,26 @@ export function AdminBackButton({
   const router = useRouter()
 
   const goBack = () => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back()
+    if (typeof window === 'undefined') {
+      router.push(fallbackHref)
       return
     }
+
+    const referrer = document.referrer
+
+    try {
+      const referrerUrl = referrer ? new URL(referrer) : null
+      const isSameAdminOrigin = referrerUrl?.origin === window.location.origin
+      const isDifferentPage = referrerUrl?.pathname !== window.location.pathname
+
+      if (window.history.length > 1 && isSameAdminOrigin && isDifferentPage) {
+        router.back()
+        return
+      }
+    } catch {
+      // Fall through to the safe fallback route.
+    }
+
     router.push(fallbackHref)
   }
 

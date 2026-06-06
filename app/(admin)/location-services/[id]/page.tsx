@@ -12,6 +12,8 @@ import { Field }            from '@/components/ui/Field'
 import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
+import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
 import {
@@ -37,6 +39,7 @@ import {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'seo',         label: 'SEO'         },
+  { id: 'preview',     label: 'Preview'     },
   { id: 'hero',        label: 'Hero'        },
   { id: 'about',       label: 'About'       },
   { id: 'pricing',     label: 'Pricing'     },
@@ -168,7 +171,7 @@ export default function LSEditorPage() {
 
   const liveUrl = s(ls.canonical_url).startsWith('http')
     ? s(ls.canonical_url)
-    : `https://fiixup.in/${s(ls.city_slug)}${s(ls.area_slug) ? '/'+s(ls.area_slug) : ''}/${s(ls.service_slug)}`
+    : publicSiteUrl(`/${s(ls.city_slug)}${s(ls.area_slug) ? '/'+s(ls.area_slug) : ''}/${s(ls.service_slug)}`)
 
   return (
     <div className="space-y-5">
@@ -283,6 +286,24 @@ export default function LSEditorPage() {
               )}
             </>
           }
+        />
+      )}
+
+      {/* ══════════════ PREVIEW ══════════════ */}
+      {tab === 'preview' && (
+        <LivePagePreview
+          title={`Location service preview — ${s(ls.service_name)}`}
+          url={liveUrl}
+          description="Loads the real Fiixup location-service page. Save changes first, then reload the preview to verify the live layout."
+        />
+      )}
+
+      {/* ══════════════ PREVIEW ══════════════ */}
+      {tab === 'preview' && (
+        <LivePagePreview
+          title={`Location service preview — ${s(ls.service_name)}`}
+          url={liveUrl}
+          description="Loads the real Fiixup location-service page. Save changes first, then reload the preview to verify the live layout."
         />
       )}
 

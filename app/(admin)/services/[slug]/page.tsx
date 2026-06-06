@@ -11,6 +11,8 @@ import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }     from '@/components/navigation/AdminBackButton'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { ChildTableEditor }    from '@/components/editors/ChildTableEditor'
+import { LivePagePreview }     from '@/components/preview/LivePagePreview'
+import { publicSiteUrl }       from '@/lib/public-site'
 import { showToast }           from '@/components/ui/Toast'
 import { saveService }         from '@/lib/actions'
 import {
@@ -19,7 +21,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-const TABS = ['SEO', 'Schema', 'Details', 'Pricing', 'Features', 'FAQs', 'Testimonials', 'Brands'] as const
+const TABS = ['SEO', 'Schema', 'Details', 'Pricing', 'Features', 'FAQs', 'Testimonials', 'Brands', 'Preview'] as const
 type Tab = typeof TABS[number]
 
 export default function ServiceEditorPage() {
@@ -134,6 +136,8 @@ export default function ServiceEditorPage() {
     },
   }
 
+  const liveUrl = publicSiteUrl(`/services/${serviceSlug}`)
+
   return (
     <div className="space-y-6">
 
@@ -157,7 +161,7 @@ export default function ServiceEditorPage() {
           <button onClick={fetchAll} className="admin-btn-secondary">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          <a href={`https://fiixup.in/services/${serviceSlug}`} target="_blank" rel="noopener noreferrer" className="admin-btn-secondary">
+          <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="admin-btn-secondary">
             <ExternalLink className="w-4 h-4" /> View Live
           </a>
         </div>
@@ -304,6 +308,15 @@ export default function ServiceEditorPage() {
         </div>
       )}
 
+      {tab === 'Preview' && (
+        <LivePagePreview
+          title={`Service preview — ${String(svc.title ?? serviceSlug)}`}
+          url={liveUrl}
+          description="Loads the real global service page from the Fiixup frontend. Save changes first, then reload the preview to check the live layout."
+        />
+      )}
+
+
       {/* ── Brands ── */}
       {tab === 'Brands' && (
         <div className="admin-card p-6 space-y-4">
@@ -322,6 +335,14 @@ export default function ServiceEditorPage() {
             onSave={(val) => saveJson('bike_brands', val)}
           />
         </div>
+      )}
+
+      {tab === 'Preview' && (
+        <LivePagePreview
+          title={`Service preview — ${String(svc.title ?? serviceSlug)}`}
+          url={liveUrl}
+          description="Loads the real global service page from the Fiixup frontend. Save changes first, then reload the preview to check the live layout."
+        />
       )}
     </div>
   )

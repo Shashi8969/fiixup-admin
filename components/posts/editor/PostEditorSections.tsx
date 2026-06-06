@@ -1,13 +1,12 @@
 'use client'
 
 import { clsx } from 'clsx'
-import { ArrowLeft, ExternalLink, Eye, FileText, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ExternalLink, FileText, Loader2, RefreshCw } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
 import { BlockEditor } from '@/components/posts/editor/BlockEditor'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { SeoMetaPanel } from '@/components/seo/SeoMetaPanel'
-import { BlogPostLivePreview } from '@/components/posts/editor/BlogPostLivePreview'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { TABS, type Block, type SchemaType, type Tab } from '@/components/posts/editor/types'
 
@@ -155,12 +154,10 @@ export function SchemaTab({ post, blocks, schemaType, setSchemaType, overrides, 
   )
 }
 
-export function ContentTab({ post, blocks, setBlocks, preview, setPreview, saving, saveBlocks, save }: {
+export function ContentTab({ post, blocks, setBlocks, saving, saveBlocks, save }: {
   post: Record<string, unknown>
   blocks: Block[]
   setBlocks: (blocks: Block[]) => void
-  preview: boolean
-  setPreview: React.Dispatch<React.SetStateAction<boolean>>
   saving: boolean
   saveBlocks: (blocks: Block[]) => void
   save: SaveFn
@@ -182,10 +179,6 @@ export function ContentTab({ post, blocks, setBlocks, preview, setPreview, savin
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-base font-semibold text-[#e2e8f0]">Content Blocks</h2>
         <div className="flex gap-2">
-          <button onClick={() => setPreview(p => !p)}
-            className={clsx('admin-btn-secondary text-xs', preview && 'bg-blue-500/20 text-blue-400 border-blue-500/30')}>
-            <Eye className="w-4 h-4" /> {preview ? 'Edit Blocks' : 'Live Preview'}
-          </button>
           <button onClick={() => saveBlocks(blocks)} disabled={saving} className="admin-btn-primary text-xs">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Save Content
@@ -193,11 +186,7 @@ export function ContentTab({ post, blocks, setBlocks, preview, setPreview, savin
         </div>
       </div>
 
-      {preview ? (
-        <BlogPostLivePreview post={post} blocks={blocks} />
-      ) : (
-        <BlockEditor blocks={blocks} onChange={setBlocks} />
-      )}
+      <BlockEditor blocks={blocks} onChange={setBlocks} />
 
       <div className="flex justify-end">
         <button onClick={() => saveBlocks(blocks)} disabled={saving} className="admin-btn-primary">

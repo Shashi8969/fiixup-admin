@@ -11,6 +11,8 @@ import { Field }         from '@/components/ui/Field'
 import { SeoMetaPanel }  from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
+import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }     from '@/components/ui/Toast'
 import {
@@ -35,6 +37,7 @@ import {
 // ── Tab definitions ────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'seo',         label: 'SEO'         },
+  { id: 'preview',     label: 'Preview'     },
   { id: 'hero',        label: 'Hero'        },
   { id: 'schema',      label: 'Schema'      },
   { id: 'about',       label: 'About'       },
@@ -141,7 +144,7 @@ export default function CityEditorPage() {
     return { success: true, message: 'Schema saved' }
   }
 
-  const liveUrl = `https://fiixup.in/${citySlug}`
+  const liveUrl = publicSiteUrl(`/${citySlug}`)
 
   return (
     <div className="space-y-5">
@@ -213,6 +216,24 @@ export default function CityEditorPage() {
               <Field label="Postal Code" value={s(city.postal_code)} onSave={saveField('postal_code')} />
             </>
           }
+        />
+      )}
+
+      {/* ════════════════════ PREVIEW ════════════════════ */}
+      {tab === 'preview' && (
+        <LivePagePreview
+          title={`City preview — ${s(city.name) || citySlug}`}
+          url={liveUrl}
+          description="Loads the real Fiixup city frontend page inside admin. Save city/area changes first, then reload preview to verify the live design."
+        />
+      )}
+
+      {/* ════════════════════ PREVIEW ════════════════════ */}
+      {tab === 'preview' && (
+        <LivePagePreview
+          title={`City preview — ${s(city.name) || citySlug}`}
+          url={liveUrl}
+          description="Loads the real Fiixup city frontend page inside admin. Save city/area changes first, then reload preview to verify the live design."
         />
       )}
 
