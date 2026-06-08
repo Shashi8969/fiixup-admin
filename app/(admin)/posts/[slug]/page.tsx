@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
 import { savePost } from '@/lib/actions'
+import { DraftPreviewPanel } from '@/components/preview/DraftPreviewPanel'
 import type { Block, SchemaType, Tab } from '@/components/posts/editor/types'
 import { toBlocks, stripIds } from '@/utils/posts/blockUtils'
 import {
@@ -19,25 +20,32 @@ import {
   SeoTab,
   SettingsTab,
 } from '@/components/posts/editor/PostEditorSections'
-import { LivePagePreview } from '@/components/preview/LivePagePreview'
 import { publicSiteUrl } from '@/lib/public-site'
 
 export default function PostEditorPage() {
-  const params   = useParams()
+  const params = useParams()
   const postSlug = String(params.slug)
 
-  const [post,       setPost]       = useState<Record<string, unknown> | null>(null)
-  const [tab,        setTab]        = useState<Tab>('SEO')
-  const [loading,    setLoading]    = useState(true)
-  const [blocks,     setBlocks]     = useState<Block[]>([])
-  const [saving,     setSaving]     = useState(false)
+  const [post, setPost] = useState<Record<string, unknown> | null>(null)
+  const [tab, setTab] = useState<Tab>('SEO')
+  const [loading, setLoading] = useState(true)
+  const [blocks, setBlocks] = useState<Block[]>([])
+  const [saving, setSaving] = useState(false)
   const [schemaType, setSchemaType] = useState<SchemaType>('BlogPosting')
-  const [overrides,  setOverrides]  = useState<Record<string, string>>({})
+  const [overrides, setOverrides] = useState<Record<string, string>>({})
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     const sb = getBrowserClient()
-    const { data } = await sb.from('posts').select('*').eq('slug', postSlug).single()
+    const { data, error } = await sb.from('posts').select('*').eq('slug', postSlug).single()
+
+    if (error) {
+      showToast('error', error.message || 'Failed to load post')
+      setPost(null)
+      setLoading(false)
+      return
+    }
+
     if (data) {
       setPost(data)
       setBlocks(toBlocks(data.content))
@@ -46,22 +54,28 @@ export default function PostEditorPage() {
         setOverrides(data.schema_overrides as Record<string, string>)
       }
     }
+
     setLoading(false)
   }, [postSlug])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-    </div>
-  )
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+      </div>
+    )
+  }
+
   if (!post) return <div className="text-red-400 p-8">Post not found: {postSlug}</div>
 
   const save = (col: string) => async (val: unknown) => {
     const result = await savePost(String(post.id), postSlug, { [col]: val })
     if (!result.success) return result
-    setPost((p) => p ? { ...p, [col]: val } : p)
+    setPost((p) => (p ? { ...p, [col]: val } : p))
     showToast('success', result.message ?? 'Saved')
     return result
   }
@@ -69,15 +83,18 @@ export default function PostEditorPage() {
   const savePatch = async (patch: Record<string, unknown>) => {
     const result = await savePost(String(post.id), postSlug, patch)
     if (!result.success) return result
-    setPost((p) => p ? { ...p, ...patch } : p)
+    setPost((p) => (p ? { ...p, ...patch } : p))
     showToast('success', result.message ?? 'Saved')
     return result
   }
 
   const saveBool = async (col: string, val: boolean) => {
     const result = await savePost(String(post.id), postSlug, { [col]: val })
-    if (!result.success) { showToast('error', result.error); return }
-    setPost((p) => p ? { ...p, [col]: val } : p)
+    if (!result.success) {
+      showToast('error', result.error ?? 'Save failed')
+      return
+    }
+    setPost((p) => (p ? { ...p, [col]: val } : p))
     showToast('success', result.message ?? 'Saved')
   }
 
@@ -85,21 +102,28 @@ export default function PostEditorPage() {
     setSaving(true)
     const result = await savePost(String(post.id), postSlug, { content: stripIds(bl) })
     setSaving(false)
-    if (result.success) showToast('success', 'Content saved')
-    else showToast('error', result.error ?? 'Save failed')
+
+    if (result.success) {
+      setBlocks(bl)
+      setPost((p) => (p ? { ...p, content: stripIds(bl) } : p))
+      showToast('success', 'Content saved')
+    } else {
+      showToast('error', result.error ?? 'Save failed')
+    }
   }
 
   const saveSchema = async () => {
     const result = await savePost(String(post.id), postSlug, {
-      schema_type:      schemaType,
+      schema_type: schemaType,
       schema_overrides: overrides,
     })
+
     if (result.success) showToast('success', 'Schema saved')
     else showToast('error', result.error ?? 'Save failed')
   }
 
   const liveUrl = publicSiteUrl(`/blog/${postSlug}`)
-  const toggleFeatured = () => saveBool('featured', !post.featured)
+  const toggleFeatured = () => saveBool('featured', !Boolean(post.featured))
 
   return (
     <div className="space-y-6">
@@ -134,18 +158,16 @@ export default function PostEditorPage() {
       )}
 
       {tab === 'Preview' && (
-        <LivePagePreview
-          title={`Blog preview — ${String(post.title ?? postSlug)}`}
-          url={liveUrl}
-          description="Loads the real Fiixup blog page from the main website, so typography, spacing, CTA, author card, related posts and block rendering match the frontend. Save your latest changes before refreshing the preview."
-        />
-      )}
-
-      {tab === 'Preview' && (
-        <LivePagePreview
-          title={`Blog preview — ${String(post.title ?? postSlug)}`}
-          url={liveUrl}
-          description="Loads the real Fiixup blog page from the main website, so typography, spacing, CTA, author card, related posts and block rendering match the frontend. Save your latest changes before refreshing the preview."
+        <DraftPreviewPanel
+          title={`Blog draft preview — ${String(post.title ?? postSlug)}`}
+          contentType="post"
+          sourceTable="posts"
+          sourceId={String(post.id)}
+          sourceSlug={postSlug}
+          publicPath={`/blog/${postSlug}`}
+          payload={{ ...post, content: stripIds(blocks) }}
+          imageSettings={{}}
+          onPublished={fetchData}
         />
       )}
 

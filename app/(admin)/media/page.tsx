@@ -146,6 +146,10 @@ export default function MediaLibraryPage() {
           meta_description: uploadForm.meta_description,
           caption:          uploadForm.caption,
           tags:             uploadForm.tags ? uploadForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+          crop_mode:        'contain',
+          crop_ratio:       'auto',
+          focal_x:          50,
+          focal_y:          50,
         })
 
         if (dbError) {
@@ -298,7 +302,7 @@ export default function MediaLibraryPage() {
                       : 'border-[#2a2d3e] hover:border-[#3a3d4e]'
                   )}>
                   <img src={item.public_url} alt={item.alt_text ?? item.file_name}
-                    className="w-full h-full object-cover bg-[#1a1d27]"
+                    className={clsx('w-full h-full bg-[#1a1d27]', item.crop_mode === 'cover' ? 'object-cover' : 'object-contain')}
                     onError={e => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect fill="%231a1d27" width="100" height="100"/></svg>' }}
                   />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
@@ -323,7 +327,7 @@ export default function MediaLibraryPage() {
                       : 'border-[#2a2d3e] hover:border-[#3a3d4e] hover:bg-[#1a1d27]'
                   )}>
                   <img src={item.public_url} alt=""
-                    className="w-12 h-12 object-cover rounded-lg bg-[#1a1d27] flex-shrink-0" />
+                    className={clsx('w-12 h-12 rounded-lg bg-[#1a1d27] flex-shrink-0', item.crop_mode === 'cover' ? 'object-cover' : 'object-contain')} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-[#e2e8f0] truncate">{item.title ?? item.file_name}</p>
                     <p className="text-xs text-[#6b7280] truncate">{item.file_name}</p>

@@ -34,7 +34,8 @@ export function MediaDetailsPanel({
     <div className="w-80 flex-shrink-0 bg-[#111827] border-l border-[#1e2535] flex flex-col overflow-hidden">
       <div className="relative bg-[#0f1117] aspect-video flex items-center justify-center flex-shrink-0">
         <img src={selected.public_url} alt={selected.alt_text ?? ''}
-          className="max-w-full max-h-full object-contain p-2" />
+          className={selected.crop_mode === 'cover' ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain p-2'}
+          style={{ objectPosition: `${selected.focal_x ?? 50}% ${selected.focal_y ?? 50}%` }} />
         <button onClick={() => setSelected(null)}
           className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors">
           <X className="w-4 h-4" />
@@ -113,6 +114,37 @@ export function MediaDetailsPanel({
                 )}
               </div>
             ))}
+            <div className="rounded-xl border border-[#2a2d3e] bg-[#0f1117] p-3 space-y-3">
+              <p className="text-[10px] font-bold text-[#6b7280] uppercase tracking-wider">Frontend Crop Settings</p>
+              <div>
+                <label className="admin-label">Image Fit</label>
+                <select value={String((editForm as Record<string,unknown>).crop_mode ?? 'contain')} onChange={e => setEditForm(p => ({ ...p, crop_mode: e.target.value }))} className="admin-input text-xs">
+                  <option value="contain">Contain - show full image, no crop</option>
+                  <option value="cover">Cover - fill box, may crop</option>
+                </select>
+              </div>
+              <div>
+                <label className="admin-label">Crop Ratio Label</label>
+                <select value={String((editForm as Record<string,unknown>).crop_ratio ?? 'auto')} onChange={e => setEditForm(p => ({ ...p, crop_ratio: e.target.value }))} className="admin-input text-xs">
+                  <option value="auto">Auto / Original</option>
+                  <option value="4:3">4:3 Blog/Social Safe</option>
+                  <option value="16:9">16:9 Wide</option>
+                  <option value="1:1">1:1 Square</option>
+                  <option value="16:7">16:7 Desktop Hero</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="admin-label">Focal X: {String((editForm as Record<string,unknown>).focal_x ?? 50)}%</label>
+                  <input type="range" min={0} max={100} value={Number((editForm as Record<string,unknown>).focal_x ?? 50)} onChange={e => setEditForm(p => ({ ...p, focal_x: Number(e.target.value) }))} className="w-full accent-blue-500" />
+                </div>
+                <div>
+                  <label className="admin-label">Focal Y: {String((editForm as Record<string,unknown>).focal_y ?? 50)}%</label>
+                  <input type="range" min={0} max={100} value={Number((editForm as Record<string,unknown>).focal_y ?? 50)} onChange={e => setEditForm(p => ({ ...p, focal_y: Number(e.target.value) }))} className="w-full accent-blue-500" />
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="admin-label">Tags (comma separated)</label>
               <input type="text"
@@ -140,6 +172,9 @@ export function MediaDetailsPanel({
             <InfoRow label="Description"      value={selected.description} />
             <InfoRow label="Meta Title"       value={selected.meta_title} />
             <InfoRow label="Meta Description" value={selected.meta_description} />
+            <InfoRow label="Image Fit" value={selected.crop_mode ?? 'contain'} />
+            <InfoRow label="Ratio" value={selected.crop_ratio ?? 'auto'} />
+            <InfoRow label="Focal Point" value={`${selected.focal_x ?? 50}% / ${selected.focal_y ?? 50}%`} />
             {selected.tags?.length > 0 && (
               <div>
                 <p className="text-[10px] text-[#6b7280] font-semibold uppercase tracking-wider mb-1">Tags</p>

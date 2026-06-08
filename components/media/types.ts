@@ -28,6 +28,10 @@ export type MediaItem = {
   meta_description:string | null
   caption:         string | null
   tags:            string[]
+  crop_mode?:      'contain' | 'cover' | string | null
+  crop_ratio?:     string | null
+  focal_x?:        number | null
+  focal_y?:        number | null
   created_at:      string
 }
 
