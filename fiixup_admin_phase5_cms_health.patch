@@ -1,0 +1,392 @@
+diff --git a/app/(admin)/cms-health/page.tsx b/app/(admin)/cms-health/page.tsx
+new file mode 100644
+index 0000000..1ab0ff0
+--- /dev/null
++++ b/app/(admin)/cms-health/page.tsx
+@@ -0,0 +1,344 @@
++'use client'
++
++// app/(admin)/cms-health/page.tsx
++// Read-only CMS health dashboard for Supabase audit views.
++
++import { useCallback, useEffect, useMemo, useState } from 'react'
++import {
++  Activity,
++  AlertTriangle,
++  CheckCircle2,
++  FileWarning,
++  Loader2,
++  RefreshCw,
++  ShieldCheck,
++  Table2,
++} from 'lucide-react'
++import { getBrowserClient } from '@/lib/supabase'
++
++type RowRecord = Record<string, unknown>
++
++type HealthState = {
++  integrityIssues: RowRecord[]
++  tableRoles: RowRecord[]
++  routeRegistry: RowRecord[]
++  errors: string[]
++}
++
++const EMPTY_HEALTH: HealthState = {
++  integrityIssues: [],
++  tableRoles: [],
++  routeRegistry: [],
++  errors: [],
++}
++
++function textValue(value: unknown): string {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'string') return value
++  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
++  try {
++    return JSON.stringify(value)
++  } catch {
++    return String(value)
++  }
++}
++
++function field(row: RowRecord, keys: string[], fallback = '—'): string {
++  for (const key of keys) {
++    const value = row[key]
++    const text = textValue(value).trim()
++    if (text) return text
++  }
++  return fallback
++}
++
++function rowSearchText(row: RowRecord): string {
++  return Object.values(row).map(textValue).join(' ').toLowerCase()
++}
++
++function issueSeverity(row: RowRecord): 'error' | 'warning' | 'info' {
++  const text = rowSearchText(row)
++  if (text.includes('error') || text.includes('missing') || text.includes('mismatch') || text.includes('broken')) {
++    return 'error'
++  }
++  if (text.includes('warning') || text.includes('legacy') || text.includes('unused') || text.includes('candidate')) {
++    return 'warning'
++  }
++  return 'info'
++}
++
++function badgeClass(kind: 'good' | 'warning' | 'danger' | 'neutral') {
++  if (kind === 'good') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
++  if (kind === 'warning') return 'bg-amber-500/10 text-amber-300 border-amber-500/20'
++  if (kind === 'danger') return 'bg-red-500/10 text-red-400 border-red-500/20'
++  return 'bg-[#2a2d3e] text-[#94a3b8] border-[#3a3d4e]'
++}
++
++function JsonPreview({ row }: { row: RowRecord }) {
++  const entries = Object.entries(row).filter(([, value]) => value !== null && value !== undefined && textValue(value).trim())
++
++  if (entries.length === 0) {
++    return <span className="text-[#6b7280]">No details available</span>
++  }
++
++  return (
++    <div className="grid md:grid-cols-2 gap-2">
++      {entries.slice(0, 10).map(([key, value]) => (
++        <div key={key} className="rounded-lg border border-[#2a2d3e] bg-[#0f1117] px-3 py-2">
++          <p className="text-[10px] uppercase tracking-wider text-[#6b7280]">{key}</p>
++          <p className="text-xs text-[#cbd5e1] mt-1 break-words">{textValue(value)}</p>
++        </div>
++      ))}
++    </div>
++  )
++}
++
++async function readAuditViews(): Promise<HealthState> {
++  const sb = getBrowserClient()
++  const errors: string[] = []
++
++  const [integrityRes, rolesRes, routesRes] = await Promise.all([
++    sb.from('cms_integrity_issues').select('*').limit(200),
++    sb.from('cms_table_roles').select('*').limit(300),
++    sb.from('cms_route_registry').select('*').limit(1000),
++  ])
++
++  if (integrityRes.error) errors.push(`cms_integrity_issues: ${integrityRes.error.message}`)
++  if (rolesRes.error) errors.push(`cms_table_roles: ${rolesRes.error.message}`)
++  if (routesRes.error) errors.push(`cms_route_registry: ${routesRes.error.message}`)
++
++  return {
++    integrityIssues: (integrityRes.data ?? []) as RowRecord[],
++    tableRoles: (rolesRes.data ?? []) as RowRecord[],
++    routeRegistry: (routesRes.data ?? []) as RowRecord[],
++    errors,
++  }
++}
++
++export default function CmsHealthPage() {
++  const [state, setState] = useState<HealthState>(EMPTY_HEALTH)
++  const [loading, setLoading] = useState(true)
++
++  const fetchHealth = useCallback(async () => {
++    setLoading(true)
++    try {
++      const nextState = await readAuditViews()
++      setState(nextState)
++    } catch (error) {
++      const message = error instanceof Error ? error.message : 'Unable to load CMS health data'
++      setState({ ...EMPTY_HEALTH, errors: [message] })
++    } finally {
++      setLoading(false)
++    }
++  }, [])
++
++  useEffect(() => {
++    fetchHealth()
++  }, [fetchHealth])
++
++  const summary = useMemo(() => {
++    const errorIssues = state.integrityIssues.filter((row) => issueSeverity(row) === 'error')
++    const warningIssues = state.integrityIssues.filter((row) => issueSeverity(row) === 'warning')
++    const searchRows = state.integrityIssues.map(rowSearchText)
++
++    return {
++      totalIssues: state.integrityIssues.length,
++      errorIssues: errorIssues.length,
++      warningIssues: warningIssues.length,
++      routes: state.routeRegistry.length,
++      tableRoles: state.tableRoles.length,
++      candidateUnused: searchRows.filter((text) => text.includes('unused') || text.includes('candidate')).length,
++      legacyTables: searchRows.filter((text) => text.includes('legacy') || text.includes('testimonial')).length,
++    }
++  }, [state])
++
++  const healthy = summary.errorIssues === 0 && state.errors.length === 0
++
++  return (
++    <div className="space-y-8">
++      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
++        <div>
++          <h1 className="admin-page-title flex items-center gap-2">
++            <Activity className="w-6 h-6 text-blue-400" />
++            CMS Health
++          </h1>
++          <p className="text-sm text-[#6b7280] mt-1">
++            Read-only audit dashboard for routes, SEO cache, table roles, legacy tables, and CMS integrity.
++          </p>
++        </div>
++
++        <button onClick={fetchHealth} disabled={loading} className="admin-btn-secondary self-start md:self-auto">
++          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
++          Refresh
++        </button>
++      </div>
++
++      <div className={`admin-card p-5 border ${healthy ? 'border-emerald-500/20' : 'border-amber-500/20'}`}>
++        <div className="flex items-start gap-3">
++          <div className={`p-2 rounded-xl ${healthy ? 'bg-emerald-500/10' : 'bg-amber-500/10'}`}>
++            {healthy ? (
++              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
++            ) : (
++              <AlertTriangle className="w-5 h-5 text-amber-300" />
++            )}
++          </div>
++          <div>
++            <p className="font-semibold text-white">
++              {healthy ? 'CMS audit views are reachable and no critical issue was detected.' : 'CMS health needs review.'}
++            </p>
++            <p className="text-xs text-[#94a3b8] mt-1 leading-relaxed">
++              This page does not change your database. It only reads existing Supabase audit views and shows where content, routes, or legacy tables need attention.
++            </p>
++          </div>
++        </div>
++      </div>
++
++      {state.errors.length > 0 && (
++        <div className="admin-card p-5 border-red-500/20 bg-red-500/5">
++          <p className="font-semibold text-red-300 flex items-center gap-2">
++            <FileWarning className="w-4 h-4" />
++            Audit view access errors
++          </p>
++          <div className="mt-3 space-y-2">
++            {state.errors.map((error) => (
++              <p key={error} className="text-xs text-red-200 bg-red-950/30 border border-red-500/20 rounded-lg px-3 py-2">
++                {error}
++              </p>
++            ))}
++          </div>
++        </div>
++      )}
++
++      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
++        <div className="admin-card p-4 text-center">
++          <AlertTriangle className="w-5 h-5 text-amber-300 mx-auto mb-2" />
++          <p className="text-2xl font-extrabold text-white">{summary.totalIssues}</p>
++          <p className="text-xs text-[#6b7280] mt-0.5">Integrity rows</p>
++        </div>
++        <div className="admin-card p-4 text-center">
++          <GlobeIcon />
++          <p className="text-2xl font-extrabold text-white">{summary.routes}</p>
++          <p className="text-xs text-[#6b7280] mt-0.5">Routes checked</p>
++        </div>
++        <div className="admin-card p-4 text-center">
++          <Table2 className="w-5 h-5 text-blue-400 mx-auto mb-2" />
++          <p className="text-2xl font-extrabold text-white">{summary.tableRoles}</p>
++          <p className="text-xs text-[#6b7280] mt-0.5">Table role rows</p>
++        </div>
++        <div className="admin-card p-4 text-center">
++          <ShieldCheck className="w-5 h-5 text-emerald-400 mx-auto mb-2" />
++          <p className="text-2xl font-extrabold text-white">{summary.errorIssues}</p>
++          <p className="text-xs text-[#6b7280] mt-0.5">Critical issues</p>
++        </div>
++      </div>
++
++      <div className="grid md:grid-cols-2 gap-4">
++        <div className="admin-card p-5">
++          <p className="admin-section-title">Legacy / cleanup signals</p>
++          <div className="grid grid-cols-2 gap-3 mt-4">
++            <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e] p-4">
++              <p className="text-2xl font-extrabold text-white">{summary.candidateUnused}</p>
++              <p className="text-xs text-[#6b7280] mt-1">Candidate unused rows</p>
++            </div>
++            <div className="rounded-xl bg-[#0f1117] border border-[#2a2d3e] p-4">
++              <p className="text-2xl font-extrabold text-white">{summary.legacyTables}</p>
++              <p className="text-xs text-[#6b7280] mt-1">Legacy/testimonial rows</p>
++            </div>
++          </div>
++          <p className="text-xs text-[#6b7280] mt-4 leading-relaxed">
++            These are review signals, not automatic delete instructions. Keep legacy tables until review migration is complete.
++          </p>
++        </div>
++
++        <div className="admin-card p-5">
++          <p className="admin-section-title">Recommended review order</p>
++          <div className="mt-4 space-y-2 text-xs text-[#cbd5e1]">
++            <p className="rounded-lg bg-[#0f1117] border border-[#2a2d3e] px-3 py-2">1. Fix missing route / seo_pages cache rows first.</p>
++            <p className="rounded-lg bg-[#0f1117] border border-[#2a2d3e] px-3 py-2">2. Fix FAQ cache mismatch rows before publishing more pages.</p>
++            <p className="rounded-lg bg-[#0f1117] border border-[#2a2d3e] px-3 py-2">3. Treat unused and legacy tables as migration notes, not errors.</p>
++          </div>
++        </div>
++      </div>
++
++      <section className="admin-card p-5">
++        <div className="flex items-center justify-between gap-3 mb-4">
++          <div>
++            <p className="admin-section-title">Integrity issues</p>
++            <p className="text-xs text-[#6b7280] mt-1">Source: cms_integrity_issues</p>
++          </div>
++          <span className={`text-xs px-2 py-1 rounded-full border ${badgeClass(summary.errorIssues > 0 ? 'danger' : summary.warningIssues > 0 ? 'warning' : 'good')}`}>
++            {summary.errorIssues > 0 ? `${summary.errorIssues} critical` : summary.warningIssues > 0 ? `${summary.warningIssues} warning` : 'Healthy'}
++          </span>
++        </div>
++
++        {state.integrityIssues.length === 0 ? (
++          <p className="text-sm text-[#94a3b8] bg-[#0f1117] border border-[#2a2d3e] rounded-xl px-4 py-5">
++            No integrity rows returned. If your audit views are configured, this usually means there are no current integrity issues.
++          </p>
++        ) : (
++          <div className="space-y-3">
++            {state.integrityIssues.map((row, index) => {
++              const severity = issueSeverity(row)
++              return (
++                <div key={index} className="rounded-xl border border-[#2a2d3e] bg-[#11141d] p-4">
++                  <div className="flex flex-wrap items-center gap-2 mb-3">
++                    <span className={`text-[11px] px-2 py-1 rounded-full border ${badgeClass(severity === 'error' ? 'danger' : severity === 'warning' ? 'warning' : 'neutral')}`}>
++                      {severity}
++                    </span>
++                    <p className="text-sm font-semibold text-white">
++                      {field(row, ['issue_type', 'issue', 'check_name', 'table_name', 'route_type'], `Issue ${index + 1}`)}
++                    </p>
++                  </div>
++                  <JsonPreview row={row} />
++                </div>
++              )
++            })}
++          </div>
++        )}
++      </section>
++
++      <section className="grid lg:grid-cols-2 gap-4">
++        <div className="admin-card p-5 overflow-hidden">
++          <p className="admin-section-title">Route registry sample</p>
++          <p className="text-xs text-[#6b7280] mt-1 mb-4">Source: cms_route_registry</p>
++          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
++            {state.routeRegistry.slice(0, 80).map((row, index) => (
++              <div key={index} className="rounded-lg border border-[#2a2d3e] bg-[#0f1117] px-3 py-2">
++                <p className="text-xs text-white break-words">{field(row, ['public_path', 'url_path', 'route_path', 'path', 'canonical_url'])}</p>
++                <p className="text-[11px] text-[#6b7280] mt-1">
++                  {field(row, ['route_type', 'page_type', 'source_table', 'table_name'], 'route')}
++                </p>
++              </div>
++            ))}
++            {!loading && state.routeRegistry.length === 0 && <p className="text-sm text-[#94a3b8]">No route rows returned.</p>}
++          </div>
++        </div>
++
++        <div className="admin-card p-5 overflow-hidden">
++          <p className="admin-section-title">Table role sample</p>
++          <p className="text-xs text-[#6b7280] mt-1 mb-4">Source: cms_table_roles</p>
++          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
++            {state.tableRoles.slice(0, 80).map((row, index) => (
++              <div key={index} className="rounded-lg border border-[#2a2d3e] bg-[#0f1117] px-3 py-2">
++                <p className="text-xs text-white break-words">{field(row, ['table_name', 'name', 'relation_name'])}</p>
++                <p className="text-[11px] text-[#6b7280] mt-1 break-words">
++                  {field(row, ['role', 'table_role', 'usage', 'status', 'notes'], 'table role')}
++                </p>
++              </div>
++            ))}
++            {!loading && state.tableRoles.length === 0 && <p className="text-sm text-[#94a3b8]">No table role rows returned.</p>}
++          </div>
++        </div>
++      </section>
++    </div>
++  )
++}
++
++function GlobeIcon() {
++  return (
++    <svg className="w-5 h-5 text-blue-400 mx-auto mb-2" viewBox="0 0 24 24" fill="none" aria-hidden="true">
++      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="currentColor" strokeWidth="2" />
++      <path d="M3.6 9h16.8M3.6 15h16.8M12 3c2.1 2.2 3.2 5.2 3.2 9s-1.1 6.8-3.2 9c-2.1-2.2-3.2-5.2-3.2-9S9.9 5.2 12 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
++    </svg>
++  )
++}
+diff --git a/app/(admin)/page.tsx b/app/(admin)/page.tsx
+index 0cf7bcd..8fa4d23 100644
+--- a/app/(admin)/page.tsx
++++ b/app/(admin)/page.tsx
+@@ -7,7 +7,7 @@ import Link from 'next/link'
+ import { getBrowserClient } from '@/lib/supabase'
+ import {
+   MapPin, Settings, Layers, FileText,
+-  Package, Globe, ArrowRight, Database, Star,
++  Package, Globe, ArrowRight, Database, Star, Activity,
+ } from 'lucide-react'
+ 
+ type Stats = {
+@@ -33,6 +33,7 @@ const NAV_CARDS = [
+   { href: '/posts',              icon: FileText,   label: 'Blog Posts',           desc: 'Edit post content, SEO meta, featured status'                 },
+   { href: '/services',           icon: Package,    label: 'Services',             desc: 'Edit global service catalogue, pricing, brands & FAQs'        },
+   { href: '/reviews',            icon: Star,       label: 'Review Library',       desc: 'Manage real Google and customer review sources'              },
++  { href: '/cms-health',         icon: Activity,   label: 'CMS Health',           desc: 'Check routes, SEO cache, table roles and legacy cleanup signals' },
+ ]
+ 
+ async function getStats(): Promise<Stats> {
+diff --git a/components/ui/AdminLayout.tsx b/components/ui/AdminLayout.tsx
+index 4a8c7cb..ed4ffcb 100644
+--- a/components/ui/AdminLayout.tsx
++++ b/components/ui/AdminLayout.tsx
+@@ -10,7 +10,7 @@ import {
+   Wrench, LayoutDashboard, MapPin, Settings,
+   FileText, Package, Layers, LogOut,
+   Menu, X, ChevronRight, Globe, Image,
+-  Route, Star,
++  Route, Star, Activity,
+ } from 'lucide-react'
+ import { clsx } from 'clsx'
+ 
+@@ -23,6 +23,7 @@ const NAV = [
+   { href: '/services',            icon: Package,         label: 'Services'          },
+   { href: '/media',               icon: Image,           label: 'Media Library'     },
+   { href: '/reviews',             icon: Star,            label: 'Review Library'    },
++  { href: '/cms-health',          icon: Activity,        label: 'CMS Health'        },
+   { href: '/redirects',            icon: Route,           label: 'Redirects'         },
+ 
+ ]
