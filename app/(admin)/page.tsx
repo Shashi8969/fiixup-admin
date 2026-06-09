@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import {
   MapPin, Settings, Layers, FileText,
-  Package, Globe, ArrowRight, Database,
+  Package, Globe, ArrowRight, Database, Star,
 } from 'lucide-react'
 
 type Stats = {
@@ -32,6 +32,7 @@ const NAV_CARDS = [
   { href: '/city-service-pages', icon: Layers,     label: 'City Service Pages',   desc: 'Edit category pages (battery, tyre, oil-change per city)'     },
   { href: '/posts',              icon: FileText,   label: 'Blog Posts',           desc: 'Edit post content, SEO meta, featured status'                 },
   { href: '/services',           icon: Package,    label: 'Services',             desc: 'Edit global service catalogue, pricing, brands & FAQs'        },
+  { href: '/reviews',            icon: Star,       label: 'Review Library',       desc: 'Manage real Google and customer review sources'              },
 ]
 
 async function getStats(): Promise<Stats> {

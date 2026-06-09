@@ -10,7 +10,7 @@ import {
   Wrench, LayoutDashboard, MapPin, Settings,
   FileText, Package, Layers, LogOut,
   Menu, X, ChevronRight, Globe, Image,
-  Route,
+  Route, Star,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -22,7 +22,8 @@ const NAV = [
   { href: '/posts',               icon: FileText,        label: 'Blog Posts'        },
   { href: '/services',            icon: Package,         label: 'Services'          },
   { href: '/media',               icon: Image,           label: 'Media Library'     },
-  { href: '/redirects', icon: Route, label: 'Redirects' },
+  { href: '/reviews',             icon: Star,            label: 'Review Library'    },
+  { href: '/redirects',            icon: Route,           label: 'Redirects'         },
 
 ]
 
