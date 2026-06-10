@@ -1,11 +1,8 @@
 'use client'
-// app/reset-password/page.tsx
-// Supabase redirects here after user clicks the reset link in their email
-// URL contains #access_token — Supabase client picks it up automatically
 
-import { useState, useEffect } from 'react'
-import { useRouter }           from 'next/navigation'
-import { getBrowserClient }    from '@/lib/supabase'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { getBrowserClient } from '@/lib/supabase'
 import { KeyRound, Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react'
 
 const INPUT: React.CSSProperties = {
@@ -20,24 +17,115 @@ const LABEL: React.CSSProperties = {
   letterSpacing: '0.08em', marginBottom: '8px',
 }
 
+function ResetPasswordFallback() {
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0c10', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: '32px', height: '32px', border: '3px solid #2563eb', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
+
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordInner />
+    </Suspense>
+  )
+}
+
+function ResetPasswordInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const [password,  setPassword]  = useState('')
-  const [confirm,   setConfirm]   = useState('')
-  const [showPw,    setShowPw]    = useState(false)
-  const [loading,   setLoading]   = useState(false)
-  const [error,     setError]     = useState('')
-  const [success,   setSuccess]   = useState(false)
-  const [hasSession,setHasSession]= useState(false)
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [checking, setChecking] = useState(true)
+  const [error, setError] = useState('')
+  const [linkError, setLinkError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [hasRecoverySession, setHasRecoverySession] = useState(false)
 
-  // Supabase processes the #access_token from the URL automatically on mount
+  const errorFromUrl = useMemo(() => {
+    const description = searchParams.get('error_description')
+    const code = searchParams.get('error_code')
+
+    if (!description && !code) return ''
+
+    if (code === 'otp_expired') {
+      return 'This reset link is invalid or expired. Please request a new password reset email and use the latest link.'
+    }
+
+    return description?.replace(/\+/g, ' ') || 'Invalid or expired reset link. Please request a new one.'
+  }, [searchParams])
+
   useEffect(() => {
+    let mounted = true
     const sb = getBrowserClient()
-    sb.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setHasSession(true)
+
+    if (errorFromUrl) {
+      setLinkError(errorFromUrl)
+      setChecking(false)
+      return
+    }
+
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return
+      if (event === 'PASSWORD_RECOVERY' || session) {
+        setHasRecoverySession(true)
+        setLinkError('')
+        setChecking(false)
+      }
     })
-  }, [])
+
+    const prepareRecoverySession = async () => {
+      const code = searchParams.get('code')
+
+      if (code) {
+        const { error: exchangeError } = await sb.auth.exchangeCodeForSession(code)
+        if (!mounted) return
+
+        if (exchangeError) {
+          setLinkError(exchangeError.message || 'Invalid or expired reset link. Please request a new one.')
+          setChecking(false)
+          return
+        }
+
+        setHasRecoverySession(true)
+        setChecking(false)
+        return
+      }
+
+      // Supabase password recovery links can also arrive with tokens in the URL hash.
+      // Give the browser client a moment to parse the hash and create the session.
+      await new Promise((resolve) => setTimeout(resolve, 800))
+      const {
+        data: { session },
+      } = await sb.auth.getSession()
+
+      if (!mounted) return
+
+      if (session) {
+        setHasRecoverySession(true)
+        setLinkError('')
+      } else {
+        setLinkError('Invalid or expired reset link. Please request a new one from the login page.')
+      }
+
+      setChecking(false)
+    }
+
+    prepareRecoverySession()
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [errorFromUrl, searchParams])
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,6 +141,7 @@ export default function ResetPasswordPage() {
     if (updateError) { setError(updateError.message); setLoading(false); return }
 
     setSuccess(true)
+    setLoading(false)
     setTimeout(() => router.push('/login'), 3000)
   }
 
@@ -63,8 +152,6 @@ export default function ResetPasswordPage() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     }}>
       <div style={{ width: '100%', maxWidth: '400px' }}>
-
-        {/* Icon */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -84,17 +171,21 @@ export default function ResetPasswordPage() {
         </div>
 
         <div style={{ background: '#111827', border: '1px solid #1e2535', borderRadius: '16px', padding: '28px' }}>
-
           {success ? (
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
               <CheckCircle style={{ width: '40px', height: '40px', color: '#22c55e', margin: '0 auto 16px' }} />
               <p style={{ color: '#4ade80', fontWeight: 600, marginBottom: '8px' }}>Password updated!</p>
               <p style={{ color: '#475569', fontSize: '13px' }}>Redirecting you to login…</p>
             </div>
-          ) : !hasSession ? (
+          ) : checking ? (
             <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <p style={{ color: '#f87171', fontSize: '13px' }}>
-                Invalid or expired reset link. Please request a new one.
+              <Loader2 style={{ width: '28px', height: '28px', color: '#60a5fa', margin: '0 auto 16px', animation: 'spin 1s linear infinite' }} />
+              <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Checking your reset link…</p>
+            </div>
+          ) : linkError || !hasRecoverySession ? (
+            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+              <p style={{ color: '#f87171', fontSize: '13px', lineHeight: 1.6, margin: 0 }}>
+                {linkError || 'Invalid or expired reset link. Please request a new one.'}
               </p>
               <button
                 onClick={() => router.push('/login')}
@@ -105,7 +196,6 @@ export default function ResetPasswordPage() {
             </div>
           ) : (
             <form onSubmit={handleReset} noValidate>
-
               {error && (
                 <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '12px 14px', color: '#f87171', fontSize: '13px', marginBottom: '20px' }}>
                   ⚠ {error}
@@ -124,7 +214,7 @@ export default function ResetPasswordPage() {
                     required
                     style={{ ...INPUT, paddingRight: '44px' }}
                     onFocus={(e) => (e.target.style.borderColor = '#2563eb')}
-                    onBlur={(e)  => (e.target.style.borderColor = '#1e2535')}
+                    onBlur={(e) => (e.target.style.borderColor = '#1e2535')}
                   />
                   <button type="button" onClick={() => setShowPw(!showPw)} tabIndex={-1}
                     style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#475569', display: 'flex' }}>
@@ -144,7 +234,7 @@ export default function ResetPasswordPage() {
                   required
                   style={{ ...INPUT, borderColor: confirm && confirm !== password ? '#ef4444' : '#1e2535' }}
                   onFocus={(e) => (e.target.style.borderColor = '#2563eb')}
-                  onBlur={(e)  => (e.target.style.borderColor = confirm && confirm !== password ? '#ef4444' : '#1e2535')}
+                  onBlur={(e) => (e.target.style.borderColor = confirm && confirm !== password ? '#ef4444' : '#1e2535')}
                 />
                 {confirm && confirm !== password && (
                   <p style={{ color: '#f87171', fontSize: '11px', marginTop: '4px' }}>Passwords do not match</p>

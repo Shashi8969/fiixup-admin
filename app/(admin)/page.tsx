@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import {
   MapPin, Settings, Layers, FileText,
-  Package, Globe, ArrowRight, Database, Star, Activity,
+  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle,
 } from 'lucide-react'
 
 type Stats = {
@@ -33,6 +33,7 @@ const NAV_CARDS = [
   { href: '/posts',              icon: FileText,   label: 'Blog Posts',           desc: 'Edit post content, SEO meta, featured status'                 },
   { href: '/services',           icon: Package,    label: 'Services',             desc: 'Edit global service catalogue, pricing, brands & FAQs'        },
   { href: '/reviews',            icon: Star,       label: 'Review Library',       desc: 'Manage real Google and customer review sources'              },
+  { href: '/faq-library',        icon: HelpCircle, label: 'FAQ Library',          desc: 'Manage reusable global and targeted public FAQs'               },
   { href: '/cms-health',         icon: Activity,   label: 'CMS Health',           desc: 'Check routes, SEO cache, table roles and legacy cleanup signals' },
 ]
 
