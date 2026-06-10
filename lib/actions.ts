@@ -602,3 +602,22 @@ export async function deleteRedirect(id: string, source: string): Promise<Action
   await revalidateMainSite([source])
   return { success: true, message: 'Redirect deleted.' }
 }
+export async function revalidateSiteSettings(): Promise<ActionResult> {
+  const secret = process.env.REVALIDATE_SECRET
+  const siteUrl = process.env.MAIN_SITE_URL ?? 'https://fiixup.in'
+
+  if (!secret) {
+    return { success: false, error: 'REVALIDATE_SECRET is missing in admin environment.' }
+  }
+
+  const response = await fetch(`${siteUrl}/api/revalidate?secret=${secret}&tag=site-settings`, {
+    method: 'POST',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    return { success: false, error: 'Setting saved, but live site cache revalidation failed.' }
+  }
+
+  return { success: true, message: 'Live site settings cache cleared.' }
+}

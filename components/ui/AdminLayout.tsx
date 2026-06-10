@@ -10,7 +10,7 @@ import {
   Wrench, LayoutDashboard, MapPin, Settings,
   FileText, Package, Layers, LogOut,
   Menu, X, ChevronRight, Globe, Image,
-  Route, Star, Activity, HelpCircle, Navigation,
+  Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -25,6 +25,7 @@ const NAV = [
   { href: '/reviews',             icon: Star,            label: 'Review Library'    },
   { href: '/faq-library',         icon: HelpCircle,      label: 'FAQ Library'       },
   { href: '/navigation',          icon: Navigation,      label: 'Navigation'        },
+  { href: '/settings',            icon: SlidersHorizontal, label: 'Site Settings'     },
   { href: '/cms-health',          icon: Activity,        label: 'CMS Health'        },
   { href: '/redirects',            icon: Route,           label: 'Redirects'         },
 
