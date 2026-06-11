@@ -621,3 +621,40 @@ export async function revalidateSiteSettings(): Promise<ActionResult> {
 
   return { success: true, message: 'Live site settings cache cleared.' }
 }
+
+
+async function revalidateMainSiteTag(tag: string): Promise<ActionResult> {
+  const secret = process.env.REVALIDATE_SECRET
+  const siteUrl = process.env.MAIN_SITE_URL ?? 'https://fiixup.in'
+
+  if (!secret) {
+    return { success: false, error: 'REVALIDATE_SECRET is missing in admin environment.' }
+  }
+
+  const response = await fetch(`${siteUrl}/api/revalidate?secret=${secret}&tag=${encodeURIComponent(tag)}`, {
+    method: 'POST',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    return { success: false, error: `${tag} saved, but live site cache revalidation failed.` }
+  }
+
+  return { success: true, message: `${tag} cache cleared.` }
+}
+
+export async function revalidateNavigationLinks(): Promise<ActionResult> {
+  return revalidateMainSiteTag('navigation-links')
+}
+
+export async function revalidateFaqLibrary(): Promise<ActionResult> {
+  return revalidateMainSiteTag('faq-library')
+}
+
+export async function revalidateReviewSources(): Promise<ActionResult> {
+  return revalidateMainSiteTag('reviews')
+}
+
+export async function revalidateSeoPages(): Promise<ActionResult> {
+  return revalidateMainSiteTag('seo-pages')
+}

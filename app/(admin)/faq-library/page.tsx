@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
+import { revalidateFaqLibrary } from '@/lib/actions'
 import {
   CheckCircle,
   HelpCircle,
@@ -199,7 +200,8 @@ export default function FaqLibraryPage() {
       return
     }
 
-    showToast('success', 'FAQ added.')
+    const revalidate = await revalidateFaqLibrary()
+    showToast('success', revalidate.success ? 'FAQ added and live cache cleared.' : 'FAQ added. Live site may update within 1 hour.')
     setNewFaq({ ...EMPTY_FORM })
     setShowCreate(false)
     fetchFaqs()
@@ -235,7 +237,8 @@ export default function FaqLibraryPage() {
       return
     }
 
-    showToast('success', 'FAQ saved.')
+    const revalidate = await revalidateFaqLibrary()
+    showToast('success', revalidate.success ? 'FAQ saved and live cache cleared.' : 'FAQ saved. Live site may update within 1 hour.')
     cancelEdit()
     fetchFaqs()
   }
@@ -253,7 +256,8 @@ export default function FaqLibraryPage() {
       return
     }
 
-    showToast('success', 'FAQ deleted.')
+    const revalidate = await revalidateFaqLibrary()
+    showToast('success', revalidate.success ? 'FAQ deleted and live cache cleared.' : 'FAQ deleted. Live site may update within 1 hour.')
     fetchFaqs()
   }
 

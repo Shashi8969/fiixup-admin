@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
+import { revalidateNavigationLinks } from '@/lib/actions'
 import {
   CheckCircle,
   ExternalLink,
@@ -192,7 +193,8 @@ export default function NavigationManagerPage() {
       return
     }
 
-    showToast('success', 'Navigation link added.')
+    const revalidate = await revalidateNavigationLinks()
+    showToast('success', revalidate.success ? 'Navigation link added and live cache cleared.' : 'Navigation link added. Live site may update within 1 hour.')
     setNewLink({ ...EMPTY_FORM })
     setShowCreate(false)
     fetchLinks()
@@ -225,7 +227,8 @@ export default function NavigationManagerPage() {
       return
     }
 
-    showToast('success', 'Navigation link updated.')
+    const revalidate = await revalidateNavigationLinks()
+    showToast('success', revalidate.success ? 'Navigation link updated and live cache cleared.' : 'Navigation link updated. Live site may update within 1 hour.')
     cancelEdit()
     fetchLinks()
   }
@@ -240,7 +243,8 @@ export default function NavigationManagerPage() {
       return
     }
 
-    showToast('success', 'Navigation link deleted.')
+    const revalidate = await revalidateNavigationLinks()
+    showToast('success', revalidate.success ? 'Navigation link deleted and live cache cleared.' : 'Navigation link deleted. Live site may update within 1 hour.')
     fetchLinks()
   }
 

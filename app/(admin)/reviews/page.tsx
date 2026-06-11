@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
+import { revalidateReviewSources } from '@/lib/actions'
 import {
   CheckCircle,
   Loader2,
@@ -187,7 +188,8 @@ export default function ReviewsPage() {
       return
     }
 
-    showToast('success', 'Review added.')
+    const revalidate = await revalidateReviewSources()
+    showToast('success', revalidate.success ? 'Review added and live cache cleared.' : 'Review added. Live site may update within 1 hour.')
     setNewReview({ ...EMPTY_FORM })
     setShowCreate(false)
     fetchReviews()
@@ -223,7 +225,8 @@ export default function ReviewsPage() {
       return
     }
 
-    showToast('success', 'Review saved.')
+    const revalidate = await revalidateReviewSources()
+    showToast('success', revalidate.success ? 'Review saved and live cache cleared.' : 'Review saved. Live site may update within 1 hour.')
     cancelEdit()
     fetchReviews()
   }
@@ -241,7 +244,8 @@ export default function ReviewsPage() {
       return
     }
 
-    showToast('success', 'Review deleted.')
+    const revalidate = await revalidateReviewSources()
+    showToast('success', revalidate.success ? 'Review deleted and live cache cleared.' : 'Review deleted. Live site may update within 1 hour.')
     fetchReviews()
   }
 
