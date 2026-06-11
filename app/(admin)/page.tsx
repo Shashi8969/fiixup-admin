@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import {
   MapPin, Settings, Layers, FileText,
-  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle, Navigation, SlidersHorizontal,
+  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,
 } from 'lucide-react'
 
 type Stats = {
@@ -34,7 +34,8 @@ const NAV_CARDS = [
   { href: '/services',           icon: Package,    label: 'Services',             desc: 'Edit global service catalogue, pricing, brands & FAQs'        },
   { href: '/reviews',            icon: Star,       label: 'Review Library',       desc: 'Manage real Google and customer review sources'              },
   { href: '/faq-library',        icon: HelpCircle, label: 'FAQ Library',          desc: 'Manage reusable global and targeted public FAQs'               },
-  { href: '/navigation',         icon: Navigation, label: 'Navigation',           desc: 'Manage header and footer links shown on the public website'      },
+  { href: '/navigation',         icon: Navigation, label: 'Navigation',           desc: 'Manage scoped header/footer links for global, city and area pages' },
+  { href: '/internal-links',     icon: Link2,      label: 'Internal Links',        desc: 'Manage related services, nearby areas and page-level link overrides'  },
   { href: '/settings',           icon: SlidersHorizontal, label: 'Site Settings', desc: 'Manage phone, WhatsApp, email and public website text'            },
   { href: '/cms-health',         icon: Activity,   label: 'CMS Health',           desc: 'Check routes, SEO cache, table roles and legacy cleanup signals' },
 ]
