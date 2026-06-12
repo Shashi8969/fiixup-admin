@@ -10,12 +10,13 @@ import {
   Wrench, LayoutDashboard, MapPin, Settings,
   FileText, Package, Layers, LogOut,
   Menu, X, ChevronRight, Globe, Image,
-  Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,
+  Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox, BarChart3,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const NAV = [
   { href: '/',                    icon: LayoutDashboard, label: 'Dashboard'         },
+    { href: '/homepage',            icon: Home,            label: 'Homepage'          },
   { href: '/cities',              icon: MapPin,          label: 'Cities'            },
   { href: '/location-services',   icon: Settings,        label: 'Location Services' },
   { href: '/city-service-pages',  icon: Layers,          label: 'Category Pages'    },
@@ -26,8 +27,10 @@ const NAV = [
   { href: '/faq-library',         icon: HelpCircle,      label: 'FAQ Library'       },
   { href: '/navigation',          icon: Navigation,      label: 'Navigation'        },
   { href: '/internal-links',      icon: Link2,           label: 'Internal Links'     },
+  { href: '/leads',               icon: Inbox,           label: 'Leads'              },
   { href: '/settings',            icon: SlidersHorizontal, label: 'Site Settings'     },
   { href: '/cms-health',          icon: Activity,        label: 'CMS Health'        },
+  { href: '/project-audit',       icon: BarChart3,       label: 'Project Audit'      },
   { href: '/redirects',            icon: Route,           label: 'Redirects'         },
 
 ]

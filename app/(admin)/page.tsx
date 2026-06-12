@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import {
   MapPin, Settings, Layers, FileText,
-  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,
+  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox, BarChart3,
 } from 'lucide-react'
 
 type Stats = {
@@ -27,6 +27,8 @@ const DEFAULT_STATS: Stats = {
 }
 
 const NAV_CARDS = [
+    { href: '/homepage',            icon: Home,       label: 'Homepage',             desc: 'Edit homepage SEO, hero, services, about, coverage and contact content' },
+
   { href: '/cities',              icon: MapPin,     label: 'Cities',               desc: 'Edit city hub pages, hero copy, areas, testimonials & FAQs'  },
   { href: '/location-services',  icon: Settings,   label: 'Location Services',    desc: 'Edit pricing, FAQs, testimonials, nearby areas per service'   },
   { href: '/city-service-pages', icon: Layers,     label: 'City Service Pages',   desc: 'Edit category pages (battery, tyre, oil-change per city)'     },
@@ -38,6 +40,7 @@ const NAV_CARDS = [
   { href: '/internal-links',     icon: Link2,      label: 'Internal Links',        desc: 'Manage related services, nearby areas and page-level link overrides'  },
   { href: '/settings',           icon: SlidersHorizontal, label: 'Site Settings', desc: 'Manage phone, WhatsApp, email and public website text'            },
   { href: '/cms-health',         icon: Activity,   label: 'CMS Health',           desc: 'Check routes, SEO cache, table roles and legacy cleanup signals' },
+    { href: '/project-audit',       icon: BarChart3,  label: 'Project Audit',        desc: 'Review homepage readiness, public routes and navigation warnings' },
 ]
 
 async function getStats(): Promise<Stats> {

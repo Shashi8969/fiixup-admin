@@ -64,8 +64,8 @@ function statusBadge(ok: boolean, label?: string) {
 async function safeSelect(table: string, select = "*", limit = 200): Promise<Row[]> {
   const sb = getBrowserClient()
   const { data, error } = await sb.from(table).select(select).limit(limit)
-  if (error) return []
-  return (data ?? []) as Row[]
+if (error) return []
+return (data ?? []) as unknown as Row[]
 }
 
 export default function ProjectAuditPage() {
