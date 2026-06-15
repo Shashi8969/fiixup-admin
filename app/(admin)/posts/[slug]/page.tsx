@@ -171,7 +171,7 @@ export default function PostEditorPage() {
         />
       )}
 
-      {tab === 'Settings' && <SettingsTab post={post} save={save} onToggleFeatured={toggleFeatured} />}
+      {tab === 'Settings' && <SettingsTab post={post} save={save} savePatch={savePatch} onToggleFeatured={toggleFeatured} />}
     </div>
   )
 }

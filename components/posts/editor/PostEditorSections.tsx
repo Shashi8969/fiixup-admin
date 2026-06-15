@@ -5,6 +5,7 @@ import { ArrowLeft, ExternalLink, FileText, Loader2, RefreshCw } from 'lucide-re
 import { Field } from '@/components/ui/Field'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
 import { BlockEditor } from '@/components/posts/editor/BlockEditor'
+import { PostAttachmentsEditor } from '@/components/posts/editor/BlogAttachmentEditors'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { SeoMetaPanel } from '@/components/seo/SeoMetaPanel'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
@@ -198,13 +199,15 @@ export function ContentTab({ post, blocks, setBlocks, saving, saveBlocks, save }
   )
 }
 
-export function SettingsTab({ post, save, onToggleFeatured }: {
+export function SettingsTab({ post, save, savePatch, onToggleFeatured }: {
   post: Record<string, unknown>
   save: SaveFn
+  savePatch: SavePatchFn
   onToggleFeatured: () => void
 }) {
   return (
-    <div className="admin-card p-6 space-y-5">
+    <div className="space-y-5">
+      <div className="admin-card p-6 space-y-5">
       <h2 className="admin-section-title">Post Settings</h2>
 
       <div className="flex items-center justify-between p-4 bg-[#1a1d27] rounded-xl border border-[#2a2d3e]">
@@ -236,6 +239,9 @@ export function SettingsTab({ post, save, onToggleFeatured }: {
           To delete this post, use your Supabase dashboard. Deletion is disabled here to prevent accidents.
         </p>
       </div>
+      </div>
+
+      <PostAttachmentsEditor post={post} savePatch={savePatch} />
     </div>
   )
 }
