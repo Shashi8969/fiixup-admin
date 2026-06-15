@@ -87,6 +87,30 @@ function getLeadPriority(lead: LeadRow): LeadPriority {
   return PRIORITY_OPTIONS.some((item) => item.value === value) ? (value as LeadPriority) : 'normal'
 }
 
+function getLeadPagePath(lead: LeadRow) {
+  const savedPath = s(lead.page_path)
+  if (savedPath) return savedPath
+
+  const pageUrl = s(lead.page_url)
+  if (!pageUrl) return ''
+
+  try {
+    return new URL(pageUrl).pathname || '/'
+  } catch {
+    return pageUrl.startsWith('/') ? pageUrl.split('?')[0] || '/' : ''
+  }
+}
+
+function getLeadDuplicateLabel(lead: LeadRow) {
+  if (!lead.is_duplicate) return 'First enquiry'
+  const previousCount = Number(lead.duplicate_lead_count_before || 0)
+  return previousCount > 0 ? `Duplicate · ${previousCount} earlier` : 'Duplicate mobile'
+}
+
+function isDuplicateLead(lead: LeadRow) {
+  return Boolean(lead.is_duplicate)
+}
+
 function toInputDateTime(value: unknown) {
   const raw = s(value)
   if (!raw) return ''
@@ -175,6 +199,7 @@ function buildLeadSummary(lead: LeadRow) {
     `Vehicle: ${getLeadVehicle(lead) || 'Not provided'}`,
     `Message: ${s(lead.message) || 'No message'}`,
     `Page: ${s(lead.page_url) || 'Not captured'}`,
+    `Duplicate: ${getLeadDuplicateLabel(lead)}`,
   ].join('\n')
 }
 
@@ -186,6 +211,8 @@ export default function LeadsPage() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all')
   const [priorityFilter, setPriorityFilter] = useState<LeadPriority | 'all'>('all')
+  const [pageFilter, setPageFilter] = useState('all')
+  const [duplicateFilter, setDuplicateFilter] = useState<'all' | 'duplicates' | 'first_time'>('all')
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | '30days'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<LeadEditForm>(makeEditForm(null))
@@ -235,6 +262,9 @@ export default function LeadsPage() {
       const priority = getLeadPriority(lead)
       if (statusFilter !== 'all' && status !== statusFilter) return false
       if (priorityFilter !== 'all' && priority !== priorityFilter) return false
+      if (pageFilter !== 'all' && getLeadPagePath(lead) !== pageFilter) return false
+      if (duplicateFilter === 'duplicates' && !isDuplicateLead(lead)) return false
+      if (duplicateFilter === 'first_time' && isDuplicateLead(lead)) return false
 
       if (dateFilter !== 'all') {
         const created = new Date(s(lead.created_at)).getTime()
@@ -255,11 +285,13 @@ export default function LeadsPage() {
         getLeadVehicle(lead),
         s(lead.message),
         s(lead.form_type),
+        s(lead.normalized_phone),
+        getLeadPagePath(lead),
         s(lead.page_url),
       ].join(' ').toLowerCase()
       return haystack.includes(term)
     })
-  }, [leads, query, statusFilter, priorityFilter, dateFilter])
+  }, [leads, query, statusFilter, priorityFilter, pageFilter, duplicateFilter, dateFilter])
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
@@ -268,8 +300,69 @@ export default function LeadsPage() {
       newLeads: leads.filter((lead) => getLeadStatus(lead) === 'new').length,
       today: leads.filter((lead) => toDateOnly(lead.created_at) === today).length,
       urgent: leads.filter((lead) => getLeadPriority(lead) === 'urgent' || getLeadPriority(lead) === 'high').length,
+      duplicates: leads.filter(isDuplicateLead).length,
       converted: leads.filter((lead) => getLeadStatus(lead) === 'converted').length,
     }
+  }, [leads])
+
+  const pageOptions = useMemo(() => {
+    return Array.from(new Set(leads.map(getLeadPagePath).filter(Boolean))).sort()
+  }, [leads])
+
+  const topSourcePages = useMemo(() => {
+    const map = new Map<string, { path: string; total: number; newLeads: number; duplicates: number; lastLeadAt: string }>()
+
+    leads.forEach((lead) => {
+      const path = getLeadPagePath(lead) || 'Unknown page'
+      const current = map.get(path) || {
+        path,
+        total: 0,
+        newLeads: 0,
+        duplicates: 0,
+        lastLeadAt: '',
+      }
+
+      current.total += 1
+      if (getLeadStatus(lead) === 'new') current.newLeads += 1
+      if (isDuplicateLead(lead)) current.duplicates += 1
+      const created = s(lead.created_at)
+      if (!current.lastLeadAt || new Date(created).getTime() > new Date(current.lastLeadAt).getTime()) {
+        current.lastLeadAt = created
+      }
+      map.set(path, current)
+    })
+
+    return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 6)
+  }, [leads])
+
+  const duplicateGroups = useMemo(() => {
+    const map = new Map<string, { phone: string; total: number; pages: Set<string>; forms: Set<string>; lastLeadAt: string }>()
+
+    leads.forEach((lead) => {
+      const phone = s(lead.normalized_phone || getLeadPhone(lead)).replace(/\D/g, '')
+      if (!phone) return
+
+      const current = map.get(phone) || {
+        phone,
+        total: 0,
+        pages: new Set<string>(),
+        forms: new Set<string>(),
+        lastLeadAt: '',
+      }
+
+      current.total += 1
+      const path = getLeadPagePath(lead)
+      if (path) current.pages.add(path)
+      const formType = s(lead.form_type)
+      if (formType) current.forms.add(formType)
+      const created = s(lead.created_at)
+      if (!current.lastLeadAt || new Date(created).getTime() > new Date(current.lastLeadAt).getTime()) {
+        current.lastLeadAt = created
+      }
+      map.set(phone, current)
+    })
+
+    return Array.from(map.values()).filter((item) => item.total > 1).sort((a, b) => b.total - a.total).slice(0, 6)
   }, [leads])
 
   const updateLead = async () => {
@@ -385,12 +478,13 @@ export default function LeadsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {[
           { label: 'Total Leads', value: stats.total, icon: Inbox },
           { label: 'New', value: stats.newLeads, icon: AlertCircle },
           { label: 'Today', value: stats.today, icon: CalendarClock },
           { label: 'High Priority', value: stats.urgent, icon: ShieldAlert },
+          { label: 'Duplicates', value: stats.duplicates, icon: RefreshCw },
           { label: 'Converted', value: stats.converted, icon: CheckCircle },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="admin-card p-4 text-center">
@@ -402,7 +496,7 @@ export default function LeadsPage() {
       </div>
 
       <div className="admin-card p-4">
-        <div className="grid gap-3 xl:grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr]">
+        <div className="grid gap-3 xl:grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.9fr_0.8fr]">
           <div className="relative">
             <Search className="w-4 h-4 text-[#6b7280] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -426,6 +520,46 @@ export default function LeadsPage() {
             <option value="7days">Last 7 days</option>
             <option value="30days">Last 30 days</option>
           </select>
+          <select value={pageFilter} onChange={(event) => setPageFilter(event.target.value)} className="admin-input">
+            <option value="all">All source pages</option>
+            {pageOptions.map((path) => <option key={path} value={path}>{path}</option>)}
+          </select>
+          <select value={duplicateFilter} onChange={(event) => setDuplicateFilter(event.target.value as typeof duplicateFilter)} className="admin-input">
+            <option value="all">All mobiles</option>
+            <option value="duplicates">Duplicate only</option>
+            <option value="first_time">First-time only</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <div className="admin-card p-5">
+          <p className="font-semibold text-white mb-3">Top source pages</p>
+          <div className="space-y-3">
+            {topSourcePages.length ? topSourcePages.map((page) => (
+              <button key={page.path} type="button" onClick={() => setPageFilter(page.path)} className="w-full rounded-xl border border-[#2a2d3e] bg-[#0f1117] p-3 text-left hover:border-blue-500/40">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-blue-200 break-all">{page.path}</p>
+                  <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-200">{page.total}</span>
+                </div>
+                <p className="mt-1 text-xs text-[#6b7280]">New {page.newLeads} · Duplicate {page.duplicates} · Last {toDisplayDate(page.lastLeadAt)}</p>
+              </button>
+            )) : <p className="text-sm text-[#6b7280]">No source page data yet.</p>}
+          </div>
+        </div>
+        <div className="admin-card p-5">
+          <p className="font-semibold text-white mb-3">Duplicate mobile groups</p>
+          <div className="space-y-3">
+            {duplicateGroups.length ? duplicateGroups.map((group) => (
+              <button key={group.phone} type="button" onClick={() => { setDuplicateFilter('duplicates'); setQuery(group.phone) }} className="w-full rounded-xl border border-[#2a2d3e] bg-[#0f1117] p-3 text-left hover:border-yellow-500/40">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-yellow-200">{group.phone}</p>
+                  <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-semibold text-yellow-200">{group.total} leads</span>
+                </div>
+                <p className="mt-1 text-xs text-[#6b7280]">Pages {group.pages.size} · Forms {group.forms.size} · Last {toDisplayDate(group.lastLeadAt)}</p>
+              </button>
+            )) : <p className="text-sm text-[#6b7280]">No duplicate mobile numbers found.</p>}
+          </div>
         </div>
       </div>
 
@@ -469,10 +603,16 @@ export default function LeadsPage() {
                           <p className="font-semibold text-white truncate">{getLeadName(lead)}</p>
                           <span className={clsx('text-[11px] px-2 py-0.5 rounded-full border capitalize', statusClass(getLeadStatus(lead)))}>{getLeadStatus(lead)}</span>
                           <span className={clsx('text-[11px] px-2 py-0.5 rounded-full border capitalize', priorityClass(getLeadPriority(lead)))}>{getLeadPriority(lead)}</span>
+                          {isDuplicateLead(lead) && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full border border-yellow-500/20 bg-yellow-500/10 text-yellow-200">
+                              Duplicate mobile
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-[#94a3b8] mt-1">
                           {getLeadService(lead)}{getLeadCity(lead) ? ` · ${getLeadCity(lead)}` : ''}{getLeadVehicle(lead) ? ` · ${getLeadVehicle(lead)}` : ''}
                         </p>
+                        {getLeadPagePath(lead) && <p className="text-[11px] text-blue-300/80 mt-1 break-all">Source: {getLeadPagePath(lead)}</p>}
                         {s(lead.message) && (
                           <p className="text-xs text-[#6b7280] mt-1 line-clamp-2">{s(lead.message)}</p>
                         )}
@@ -529,7 +669,16 @@ export default function LeadsPage() {
                 <Info label="Vehicle" value={[getLeadVehicle(selectedLead), s(selectedLead.vehicle_model)].filter(Boolean).join(' · ')} />
                 <Info label="Created" value={toDisplayDate(selectedLead.created_at)} />
                 <Info label="Last contacted" value={toDisplayDate(selectedLead.last_contacted_at)} />
+                <Info label="Source page" value={getLeadPagePath(selectedLead)} href={s(selectedLead.page_url) || undefined} icon={ExternalLink} />
+                <Info label="Duplicate status" value={getLeadDuplicateLabel(selectedLead)} />
               </div>
+
+              {isDuplicateLead(selectedLead) && (
+                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-yellow-100">
+                  <p className="font-semibold">Duplicate mobile detected</p>
+                  <p className="mt-1 text-yellow-100/80">{s(selectedLead.duplicate_note, 'This customer has submitted more than one enquiry. Check previous leads before marking lost or spam.')}</p>
+                </div>
+              )}
 
               {s(selectedLead.message) && (
                 <div>
