@@ -45,7 +45,7 @@ const TABS = [
   { id: 'hero',        label: 'Hero'        },
   { id: 'about',       label: 'About'       },
   { id: 'pricing',     label: 'Pricing'     },
-  { id: 'review',      label: 'Review'      },
+  { id: 'review',      label: 'Reviews'     },
   { id: 'faqs',        label: 'FAQs'        },
   { id: 'nearby',      label: 'Nearby Areas'},
   { id: 'related',     label: 'Related'     },
@@ -174,7 +174,7 @@ export default function LSEditorPage() {
       .select('*').eq('location_service_id', id).order('sort_order')
     if (error) { showToast('error', error.message); await fetchAll(); return }
 
-    const testimonials = (data ?? []).slice(0, 1).map((row) => ({
+    const testimonials = (data ?? []).map((row) => ({
       name: s(row.name),
       text: s(row.body),
       body: s(row.body),
@@ -183,6 +183,8 @@ export default function LSEditorPage() {
       area: s(row.area),
       source: s(row.source),
       verified: Boolean(row.verified),
+      external_id: s(row.external_id),
+      date: s(row.date_label),
     }))
 
     const { error: updateError } = await sb.from('location_services')
@@ -265,7 +267,7 @@ export default function LSEditorPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {[
           { label: 'Pricing', count: pricing.length,       color: 'blue'   },
-          { label: 'Review',  count: tests.length ? 1 : 0, color: 'yellow' },
+          { label: 'Reviews', count: tests.length,           color: 'yellow' },
           { label: 'FAQs',    count: faqs.length,          color: 'green'  },
           { label: 'Nearby',  count: nearby.length,        color: 'purple' },
           { label: 'Related', count: related.length,       color: 'orange' },
@@ -416,7 +418,7 @@ export default function LSEditorPage() {
         </div>
       )}
 
-      {/* ══════════════ REVIEW ══════════════ */}
+      {/* ══════════════ REVIEWS ══════════════ */}
       {tab === 'review' && (
         <GlobalReviewPicker
           locationServiceId={id}
@@ -480,7 +482,7 @@ export default function LSEditorPage() {
           />
 
           <SectionHeader title="Selected Related Services" count={related.length}>
-            <span className="text-xs text-[#6b7280]">Edit order or remove selections below</span>
+            <span className="text-xs text-[#6b7280]">Service slug is locked to the master catalogue. Edit display details, order, or remove below.</span>
           </SectionHeader>
           {related.length === 0 && <Empty>No related services selected yet.</Empty>}
           {related.map(row => (
@@ -490,7 +492,6 @@ export default function LSEditorPage() {
                 : `/${s(ls.city_slug)}/${s(ls.area_slug)}/${s(row.slug)}`}`}
               fields={[
                 { key: 'name',       label: 'Service Name', type: 'text'   },
-                { key: 'slug',       label: 'Service Slug', type: 'text'   },
                 { key: 'category',   label: 'Category',     type: 'text'   },
                 { key: 'sort_order', label: 'Sort Order',   type: 'number' },
               ]}

@@ -49,6 +49,14 @@ function reviewSource(row: Row): string {
   return s(row.source || row.source_name || row.platform || row.review_platform, 'google')
 }
 
+function reviewExternalId(row: Row): string {
+  return s(row.external_id || row.google_review_id || row.id).trim()
+}
+
+function reviewContentKey(row: Row): string {
+  return `${normalize(reviewName(row))}|${normalize(reviewBody(row))}`
+}
+
 export function GlobalReviewPicker({
   locationServiceId,
   existing,
@@ -62,6 +70,7 @@ export function GlobalReviewPicker({
   const [library, setLibrary] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [sourceFilter, setSourceFilter] = useState('all')
 
@@ -91,6 +100,16 @@ export function GlobalReviewPicker({
     return Array.from(values).filter(Boolean).sort((a, z) => a.localeCompare(z))
   }, [library])
 
+  const selectedExternalIds = useMemo(
+    () => new Set(existing.map((row) => s(row.external_id).trim()).filter(Boolean)),
+    [existing],
+  )
+
+  const selectedContentKeys = useMemo(
+    () => new Set(existing.map((row) => reviewContentKey(row)).filter(Boolean)),
+    [existing],
+  )
+
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase()
     return library.filter((row) => {
@@ -108,11 +127,23 @@ export function GlobalReviewPicker({
     })
   }, [library, query, sourceFilter])
 
+  const isSelected = (review: Row) => {
+    const externalId = reviewExternalId(review)
+    return (
+      (externalId && selectedExternalIds.has(externalId)) ||
+      selectedContentKeys.has(reviewContentKey(review))
+    )
+  }
+
   const useReview = async (review: Row) => {
     const reviewId = s(review.id)
     const body = reviewBody(review).trim()
     if (!body) {
       showToast('error', 'This review has no review text.')
+      return
+    }
+    if (isSelected(review)) {
+      showToast('error', 'This review is already selected for this service.')
       return
     }
 
@@ -124,47 +155,37 @@ export function GlobalReviewPicker({
       vehicle: s(review.vehicle || review.vehicle_type) || null,
       rating: Math.max(1, Math.min(5, n(review.rating, 5))),
       body,
-      date_label: s(review.date_label || review.review_date) || null,
+      date_label: s(review.date_label || review.review_date || review.published_at) || null,
       source: reviewSource(review),
+      external_id: reviewExternalId(review) || null,
       verified: b(review.verified, true),
-      sort_order: 0,
+      sort_order: existing.length + 1,
     }
 
-    const { data: inserted, error: insertError } = await sb
-      .from('ls_testimonials')
-      .insert(payload)
-      .select('id')
-      .single()
-
-    if (insertError || !inserted?.id) {
-      setSavingId(null)
-      showToast('error', insertError?.message || 'Unable to attach this review.')
-      return
-    }
-
-    const { error: cleanupError } = await sb
-      .from('ls_testimonials')
-      .delete()
-      .eq('location_service_id', locationServiceId)
-      .neq('id', inserted.id)
-
+    const { error } = await sb.from('ls_testimonials').insert(payload)
     setSavingId(null)
-    if (cleanupError) {
-      showToast('error', `Review attached, but older rows could not be removed: ${cleanupError.message}`)
-      onRefresh()
+
+    if (error) {
+      showToast('error', error.message)
       return
     }
 
-    showToast('success', 'Review selected. This service now has exactly one review.')
+    showToast('success', 'Review added to this service.')
     onRefresh()
   }
 
-  const removeReview = async () => {
-    if (!confirm('Remove the selected review from this location service?')) return
+  const removeReview = async (review: Row) => {
+    const rowId = s(review.id)
+    if (!rowId) return
+    if (!confirm(`Remove ${s(review.name, 'this review')} from this location service?`)) return
+
+    setRemovingId(rowId)
     const { error } = await sb
       .from('ls_testimonials')
       .delete()
+      .eq('id', rowId)
       .eq('location_service_id', locationServiceId)
+    setRemovingId(null)
 
     if (error) {
       showToast('error', error.message)
@@ -174,53 +195,57 @@ export function GlobalReviewPicker({
     onRefresh()
   }
 
-  const current = existing[0]
-
   return (
     <div className="space-y-4">
       <div className="admin-card p-5 space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="admin-section-title flex items-center gap-2">
-              <Star className="w-4 h-4 text-yellow-400" /> Selected Review
-            </h2>
-            <p className="text-xs text-[#6b7280] mt-1">
-              Only one review is kept for each location service. Selecting another review replaces the current one.
-            </p>
-          </div>
-          {current && (
-            <button onClick={removeReview} className="admin-btn-danger flex-shrink-0">
-              <Trash2 className="w-3.5 h-3.5" /> Remove
-            </button>
-          )}
+        <div>
+          <h2 className="admin-section-title flex items-center gap-2">
+            <Star className="w-4 h-4 text-yellow-400" /> Selected Reviews
+          </h2>
+          <p className="text-xs text-[#6b7280] mt-1">
+            Add multiple real reviews from the global library. Each selected review can be removed separately.
+          </p>
         </div>
 
-        {current ? (
-          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-white">{s(current.name, 'Fiixup Customer')}</p>
-              <span className="text-xs rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 text-yellow-300">
-                {Math.max(1, Math.min(5, n(current.rating, 5)))}★
-              </span>
-              {b(current.verified, false) && (
-                <span className="text-xs rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-green-300">
-                  Verified
-                </span>
-              )}
-            </div>
-            <p className="text-sm leading-6 text-[#cbd5e1] mt-2">{s(current.body)}</p>
-            <p className="text-xs text-[#6b7280] mt-2">
-              {[s(current.vehicle), s(current.area), s(current.source)].filter(Boolean).join(' · ')}
-            </p>
-          </div>
+        {existing.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic">No reviews selected for this service.</p>
         ) : (
-          <p className="text-sm text-[#6b7280] italic">No review selected for this service.</p>
-        )}
-
-        {existing.length > 1 && (
-          <p className="text-xs rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-orange-300">
-            {existing.length} old testimonial rows were found. Select any review below to automatically keep only one.
-          </p>
+          <div className="space-y-3">
+            {existing.map((current, index) => {
+              const rowId = s(current.id)
+              return (
+                <div key={rowId || `${reviewContentKey(current)}-${index}`} className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-white">{s(current.name, 'Fiixup Customer')}</p>
+                        <span className="text-xs rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 text-yellow-300">
+                          {Math.max(1, Math.min(5, n(current.rating, 5)))}★
+                        </span>
+                        {b(current.verified, false) && (
+                          <span className="text-xs rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-green-300">
+                            Verified
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm leading-6 text-[#cbd5e1] mt-2">{s(current.body)}</p>
+                      <p className="text-xs text-[#6b7280] mt-2">
+                        {[s(current.vehicle), s(current.area), s(current.source)].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeReview(current)}
+                      disabled={removingId === rowId}
+                      className="admin-btn-danger flex-shrink-0"
+                    >
+                      {removingId === rowId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -228,7 +253,7 @@ export function GlobalReviewPicker({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold text-white">Choose from Global Review Library</h3>
-            <p className="text-xs text-[#6b7280] mt-1">The original global review remains unchanged.</p>
+            <p className="text-xs text-[#6b7280] mt-1">The original global reviews remain unchanged.</p>
           </div>
           <button onClick={loadLibrary} disabled={loading} className="admin-btn-secondary">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -262,6 +287,7 @@ export function GlobalReviewPicker({
           <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
             {filtered.map((review) => {
               const rowId = s(review.id)
+              const alreadyAdded = isSelected(review)
               return (
                 <div key={rowId} className="rounded-xl border border-[#2a2d3e] bg-[#11131c] p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -278,11 +304,17 @@ export function GlobalReviewPicker({
                     </div>
                     <button
                       onClick={() => useReview(review)}
-                      disabled={savingId === rowId}
-                      className="admin-btn-primary flex-shrink-0"
+                      disabled={alreadyAdded || savingId === rowId}
+                      className={alreadyAdded ? 'admin-btn-secondary flex-shrink-0 opacity-60' : 'admin-btn-primary flex-shrink-0'}
                     >
-                      {savingId === rowId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      Use Review
+                      {savingId === rowId ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : alreadyAdded ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      {alreadyAdded ? 'Added' : 'Add Review'}
                     </button>
                   </div>
                 </div>
@@ -587,6 +619,7 @@ export function RelatedServicePicker({
 
   const loadServices = async () => {
     setLoading(true)
+
     let request = sb
       .from('location_services')
       .select('id, service_slug, service_name, service_category, city_slug, area_slug, is_city_level, is_active')
@@ -600,11 +633,13 @@ export function RelatedServicePicker({
 
     const { data, error } = await request
     setLoading(false)
+
     if (error) {
       showToast('error', error.message)
       setServices([])
       return
     }
+
     setServices((data ?? []) as Row[])
   }
 
@@ -631,24 +666,30 @@ export function RelatedServicePicker({
     return services.filter((service) => {
       const slug = s(service.service_slug)
       if (!slug || slug === currentServiceSlug) return false
-      if (category !== 'all' && s(service.service_category) !== category) return false
+      const serviceCategory = s(service.service_category)
+      if (category !== 'all' && serviceCategory !== category) return false
       if (!term) return true
-      return [s(service.service_name), slug, s(service.service_category)].join(' ').toLowerCase().includes(term)
+      return [
+        s(service.service_name),
+        slug,
+        serviceCategory,
+      ].join(' ').toLowerCase().includes(term)
     })
   }, [services, query, category, currentServiceSlug])
 
   const addRelated = async (service: Row) => {
-    const rowId = s(service.id)
+    const relatedLocationServiceId = s(service.id)
     const slug = s(service.service_slug).trim()
-    if (!slug) return
+    if (!relatedLocationServiceId || !slug) return
     if (existingSlugs.has(normalize(slug))) {
       showToast('error', 'This service is already related.')
       return
     }
 
-    setSavingId(rowId)
+    setSavingId(relatedLocationServiceId)
     const { error } = await sb.from('ls_related_services').insert({
       location_service_id: locationServiceId,
+      related_location_service_id: relatedLocationServiceId,
       name: s(service.service_name, slug),
       slug,
       category: s(service.service_category) || null,
@@ -672,7 +713,7 @@ export function RelatedServicePicker({
             <Link2 className="w-4 h-4 text-orange-400" /> Choose Existing Service
           </h3>
           <p className="text-xs text-[#6b7280] mt-1">
-            Showing active services that have a valid route in {isCityLevel ? citySlug : `${areaSlug}, ${citySlug}`}.
+            Showing active services from the same {isCityLevel ? `${citySlug} city-level route` : `${areaSlug}, ${citySlug} area`}.
           </p>
         </div>
         <button onClick={loadServices} disabled={loading} className="admin-btn-secondary">
@@ -700,27 +741,30 @@ export function RelatedServicePicker({
       {loading ? (
         <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-[#6b7280] italic py-3">No matching existing services found in this route scope.</p>
+        <p className="text-sm text-[#6b7280] italic py-3">No matching active services were found in this route scope.</p>
       ) : (
         <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
           {filtered.map((service) => {
-            const rowId = s(service.id)
+            const relatedLocationServiceId = s(service.id)
             const slug = s(service.service_slug)
             const alreadyAdded = existingSlugs.has(normalize(slug))
+            const serviceCategory = s(service.service_category, 'uncategorized')
             return (
-              <div key={rowId} className="flex items-center justify-between gap-4 rounded-xl border border-[#2a2d3e] bg-[#11131c] p-4">
+              <div key={relatedLocationServiceId} className="flex items-center justify-between gap-4 rounded-xl border border-[#2a2d3e] bg-[#11131c] p-4">
                 <div className="min-w-0">
-                  <p className="font-medium text-white truncate">{s(service.service_name, slug)}</p>
+                  <p className="font-medium text-white truncate">
+                    {s(service.service_name, slug)}
+                  </p>
                   <p className="text-xs text-[#6b7280] mt-1">
-                    {slug} · {s(service.service_category, 'uncategorized')}
+                    {slug} · {serviceCategory}
                   </p>
                 </div>
                 <button
                   onClick={() => addRelated(service)}
-                  disabled={alreadyAdded || savingId === rowId}
+                  disabled={alreadyAdded || savingId === relatedLocationServiceId}
                   className={alreadyAdded ? 'admin-btn-secondary flex-shrink-0 opacity-60' : 'admin-btn-primary flex-shrink-0'}
                 >
-                  {savingId === rowId ? (
+                  {savingId === relatedLocationServiceId ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : alreadyAdded ? (
                     <Check className="w-3.5 h-3.5" />
