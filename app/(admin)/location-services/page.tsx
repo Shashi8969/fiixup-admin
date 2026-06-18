@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Link                    from 'next/link'
 import { getBrowserClient }    from '@/lib/supabase'
 import { CreateLSModal }       from '@/components/create/CreateLSModal'
-import { Settings, Search, ArrowRight, Filter, Plus } from 'lucide-react'
+import { Settings, Search, ArrowRight, Plus } from 'lucide-react'
 
 export default function LocationServicesPage() {
   const [rows,       setRows]       = useState<Record<string, unknown>[]>([])
@@ -13,6 +13,7 @@ export default function LocationServicesPage() {
   const [search,     setSearch]     = useState('')
   const [city,       setCity]       = useState('bangalore')
   const [category,   setCategory]   = useState('')
+  const [area,       setArea]       = useState('')
   const [showCreate, setShowCreate] = useState(false)
 
   const CITIES = ['bangalore', 'mumbai', 'chennai', 'hyderabad']
@@ -41,8 +42,16 @@ export default function LocationServicesPage() {
     String(r.service_slug).toLowerCase().includes(search.toLowerCase())
   )
 
+  const areaOptions = Array.from(new Set(
+    rows
+      .filter((r) => !r.is_city_level && r.area_slug)
+      .map((r) => String(r.area_slug))
+  )).sort((a, z) => a.localeCompare(z))
+
   const cityRows  = filtered.filter((r) => r.is_city_level)
-  const areaRows  = filtered.filter((r) => !r.is_city_level)
+  const areaRows  = filtered.filter((r) =>
+    !r.is_city_level && (!area || String(r.area_slug) === area)
+  )
 
   const RowCard = ({ row }: { row: Record<string, unknown> }) => (
     <Link
@@ -93,7 +102,7 @@ export default function LocationServicesPage() {
           {CITIES.map((c) => (
             <button
               key={c}
-              onClick={() => setCity(c)}
+              onClick={() => { setCity(c); setArea('') }}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all capitalize ${
                 city === c ? 'tab-active' : 'tab-inactive'
               }`}
@@ -110,6 +119,18 @@ export default function LocationServicesPage() {
         >
           {CATS.map((c) => (
             <option key={c} value={c}>{c || 'All Categories'}</option>
+          ))}
+        </select>
+
+        <select
+          value={area}
+          onChange={(e) => setArea(e.target.value)}
+          className="admin-input w-auto min-w-44"
+          aria-label="Filter area-level services by area"
+        >
+          <option value="">All Areas</option>
+          {areaOptions.map((areaSlug) => (
+            <option key={areaSlug} value={areaSlug}>{areaSlug}</option>
           ))}
         </select>
 
@@ -148,21 +169,25 @@ export default function LocationServicesPage() {
           </div>
 
           {/* Area-level */}
-          {areaRows.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-sm font-bold text-[#94a3b8] uppercase tracking-wider">
-                  Area-Level Services
-                </h2>
-                <span className="text-xs text-[#6b7280] bg-[#2a2d3e] px-2 py-0.5 rounded-full">
-                  {areaRows.length}
-                </span>
-              </div>
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-bold text-[#94a3b8] uppercase tracking-wider">
+                Area-Level Services{area ? ` · ${area}` : ''}
+              </h2>
+              <span className="text-xs text-[#6b7280] bg-[#2a2d3e] px-2 py-0.5 rounded-full">
+                {areaRows.length}
+              </span>
+            </div>
+            {areaRows.length === 0 ? (
+              <p className="text-[#6b7280] text-sm italic">
+                No area-level services found{area ? ` for ${area}` : ''}.
+              </p>
+            ) : (
               <div className="space-y-2">
                 {areaRows.map((r) => <RowCard key={String(r.id)} row={r} />)}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

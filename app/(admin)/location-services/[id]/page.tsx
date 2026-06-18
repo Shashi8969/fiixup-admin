@@ -13,19 +13,21 @@ import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
 import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import {
+  FaqLibraryPicker,
+  GlobalReviewPicker,
+  RelatedServicePicker,
+} from '@/components/location-services/editor/LocationServiceContentPickers'
 import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
 import {
   ArrowLeft, ExternalLink, RefreshCw, Loader2,
-  Plus, Trash2, Save, ChevronDown, ChevronRight,
-  Star, Globe, BarChart2, Image as ImageIcon,
-  Check, X,
+  Globe, BarChart2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
   AddBtn,
-  Badge,
   ChildRow,
   Empty,
   ImagePickerTab,
@@ -43,12 +45,11 @@ const TABS = [
   { id: 'hero',        label: 'Hero'        },
   { id: 'about',       label: 'About'       },
   { id: 'pricing',     label: 'Pricing'     },
-  { id: 'testimonials',label: 'Testimonials'},
+  { id: 'review',      label: 'Review'      },
   { id: 'faqs',        label: 'FAQs'        },
   { id: 'nearby',      label: 'Nearby Areas'},
   { id: 'related',     label: 'Related'     },
   { id: 'images',      label: 'Images'      },
-  { id: 'reviews',     label: 'Reviews'     },
   { id: 'schema',      label: 'Schema'      },
   { id: 'seo_content', label: 'SEO Content' },
   { id: 'analytics',   label: 'Analytics'  },
@@ -70,7 +71,6 @@ export default function LSEditorPage() {
   const [nearby,   setNearby]   = useState<Row[]>([])
   const [related,  setRelated]  = useState<Row[]>([])
   const [images,   setImages]   = useState<Row[]>([])
-  const [reviews,  setReviews]  = useState<Row[]>([])
   const [seoPage,  setSeoPage]  = useState<Row | null>(null)
   const [analytics,setAnalytics]= useState<Row | null>(null)
 
@@ -82,14 +82,13 @@ export default function LSEditorPage() {
     if (!lsData) { setLoading(false); return }
     setLs(lsData)
 
-    const [p, t, f, n, r, img, rev, sp] = await Promise.all([
+    const [p, t, f, n, r, img, sp] = await Promise.all([
       sb.from('ls_pricing_rows')    .select('*').eq('location_service_id', id).order('sort_order'),
       sb.from('ls_testimonials')    .select('*').eq('location_service_id', id).order('sort_order'),
       sb.from('ls_faqs')            .select('*').eq('location_service_id', id).order('sort_order'),
       sb.from('ls_nearby_areas')    .select('*').eq('location_service_id', id).order('sort_order'),
       sb.from('ls_related_services').select('*').eq('location_service_id', id).order('sort_order'),
       sb.from('service_images')     .select('*').eq('ls_id', id).order('sort_order'),
-      sb.from('review_sources')     .select('*').eq('ls_id', id).order('created_at', { ascending: false }),
       sb.from('seo_pages')          .select('*').eq('location_service_id', id).single(),
     ])
 
@@ -99,7 +98,6 @@ export default function LSEditorPage() {
     setNearby  (n.data   ?? [])
     setRelated (r.data   ?? [])
     setImages  (img.data ?? [])
-    setReviews (rev.data ?? [])
     setSeoPage (sp.data  ?? null)
 
     // Fetch page_analytics if seo_page exists
@@ -169,6 +167,63 @@ export default function LSEditorPage() {
     showToast('success', 'Saved')
   }
 
+  // Child tables remain editable for compatibility, while location_services is
+  // the master source used by the seo_pages sync trigger and live frontend.
+  const syncTestimonials = async () => {
+    const { data, error } = await sb.from('ls_testimonials')
+      .select('*').eq('location_service_id', id).order('sort_order')
+    if (error) { showToast('error', error.message); await fetchAll(); return }
+
+    const testimonials = (data ?? []).slice(0, 1).map((row) => ({
+      name: s(row.name),
+      text: s(row.body),
+      body: s(row.body),
+      rating: Math.max(1, Math.min(5, Number(row.rating) || 5)),
+      vehicle: s(row.vehicle),
+      area: s(row.area),
+      source: s(row.source),
+      verified: Boolean(row.verified),
+    }))
+
+    const { error: updateError } = await sb.from('location_services')
+      .update({ testimonials, updated_at: new Date().toISOString() }).eq('id', id)
+    if (updateError) showToast('error', `Review saved locally but master sync failed: ${updateError.message}`)
+    await fetchAll()
+  }
+
+  const syncFaqs = async () => {
+    const { data, error } = await sb.from('ls_faqs')
+      .select('*').eq('location_service_id', id).order('sort_order')
+    if (error) { showToast('error', error.message); await fetchAll(); return }
+
+    const faqPayload = (data ?? []).map((row) => ({
+      question: s(row.question),
+      answer: s(row.answer),
+    }))
+
+    const { error: updateError } = await sb.from('location_services')
+      .update({ faqs: faqPayload, updated_at: new Date().toISOString() }).eq('id', id)
+    if (updateError) showToast('error', `FAQ saved locally but master sync failed: ${updateError.message}`)
+    await fetchAll()
+  }
+
+  const syncRelatedServices = async () => {
+    const { data, error } = await sb.from('ls_related_services')
+      .select('*').eq('location_service_id', id).order('sort_order')
+    if (error) { showToast('error', error.message); await fetchAll(); return }
+
+    const relatedServices = (data ?? []).map((row) => ({
+      name: s(row.name),
+      slug: s(row.slug),
+      category: s(row.category),
+    }))
+
+    const { error: updateError } = await sb.from('location_services')
+      .update({ related_services: relatedServices, updated_at: new Date().toISOString() }).eq('id', id)
+    if (updateError) showToast('error', `Related service saved locally but master sync failed: ${updateError.message}`)
+    await fetchAll()
+  }
+
   const liveUrl = s(ls.canonical_url).startsWith('http')
     ? s(ls.canonical_url)
     : publicSiteUrl(`/${s(ls.city_slug)}${s(ls.area_slug) ? '/'+s(ls.area_slug) : ''}/${s(ls.service_slug)}`)
@@ -207,15 +262,14 @@ export default function LSEditorPage() {
       </div>
 
       {/* ── Stats strip ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {[
-          { label: 'Pricing',     count: pricing.length,  color: 'blue'   },
-          { label: 'Testimonials',count: tests.length,    color: 'yellow' },
-          { label: 'FAQs',        count: faqs.length,     color: 'green'  },
-          { label: 'Nearby',      count: nearby.length,   color: 'purple' },
-          { label: 'Related',     count: related.length,  color: 'orange' },
-          { label: 'Images',      count: images.length,   color: 'pink'   },
-          { label: 'Reviews',     count: reviews.length,  color: 'red'    },
+          { label: 'Pricing', count: pricing.length,       color: 'blue'   },
+          { label: 'Review',  count: tests.length ? 1 : 0, color: 'yellow' },
+          { label: 'FAQs',    count: faqs.length,          color: 'green'  },
+          { label: 'Nearby',  count: nearby.length,        color: 'purple' },
+          { label: 'Related', count: related.length,       color: 'orange' },
+          { label: 'Images',  count: images.length,        color: 'pink'   },
         ].map(s => (
           <div key={s.label} className="admin-card px-3 py-2 text-center">
             <p className="text-lg font-bold text-[#e2e8f0]">{s.count}</p>
@@ -298,14 +352,6 @@ export default function LSEditorPage() {
         />
       )}
 
-      {/* ══════════════ PREVIEW ══════════════ */}
-      {tab === 'preview' && (
-        <LivePagePreview
-          title={`Location service preview — ${s(ls.service_name)}`}
-          url={liveUrl}
-          description="Loads the real Fiixup location-service page. Save changes first, then reload the preview to verify the live layout."
-        />
-      )}
 
       {/* ══════════════ HERO ══════════════ */}
       {tab === 'hero' && (
@@ -370,59 +416,32 @@ export default function LSEditorPage() {
         </div>
       )}
 
-      {/* ══════════════ TESTIMONIALS ══════════════ */}
-      {tab === 'testimonials' && (
-        <div className="space-y-4">
-          <SectionHeader title="Testimonials" count={tests.length}>
-            <AddBtn table="ls_testimonials" parentKey="location_service_id" parentId={id}
-              fields={[
-                { key: 'name',       label: 'Customer Name', type: 'text',    required: true },
-                { key: 'area',       label: 'Area',          type: 'text'    },
-                { key: 'vehicle',    label: 'Vehicle',       type: 'text'    },
-                { key: 'rating',     label: 'Rating (1-5)',  type: 'number',  required: true },
-                { key: 'body',       label: 'Review Text',   type: 'textarea', required: true },
-                { key: 'date_label', label: 'Date Label',    type: 'text'    },
-                { key: 'source',     label: 'Source',        type: 'text'    },
-                { key: 'sort_order', label: 'Sort Order',    type: 'number'  },
-              ]}
-              onAdded={fetchAll}
-            />
-          </SectionHeader>
-          {tests.length === 0 && <Empty>No testimonials yet.</Empty>}
-          {tests.map(row => (
-            <ChildRow key={s(row.id)} row={row} table="ls_testimonials"
-              preview={`${s(row.name)} — ${s(row.rating)}★ — ${s(row.body).slice(0, 60)}…`}
-              fields={[
-                { key: 'name',       label: 'Name',        type: 'text'    },
-                { key: 'area',       label: 'Area',        type: 'text'    },
-                { key: 'vehicle',    label: 'Vehicle',     type: 'text'    },
-                { key: 'rating',     label: 'Rating',      type: 'number'  },
-                { key: 'body',       label: 'Review',      type: 'textarea'},
-                { key: 'date_label', label: 'Date Label',  type: 'text'    },
-                { key: 'source',     label: 'Source',      type: 'text'    },
-                { key: 'verified',   label: 'Verified',    type: 'boolean' },
-                { key: 'sort_order', label: 'Sort Order',  type: 'number'  },
-              ]}
-              onSave={fetchAll}
-            />
-          ))}
-        </div>
+      {/* ══════════════ REVIEW ══════════════ */}
+      {tab === 'review' && (
+        <GlobalReviewPicker
+          locationServiceId={id}
+          existing={tests}
+          onRefresh={syncTestimonials}
+        />
       )}
 
       {/* ══════════════ FAQs ══════════════ */}
       {tab === 'faqs' && (
         <div className="space-y-4">
-          <SectionHeader title="FAQs" count={faqs.length}>
-            <AddBtn table="ls_faqs" parentKey="location_service_id" parentId={id}
-              fields={[
-                { key: 'question',   label: 'Question',   type: 'textarea', required: true },
-                { key: 'answer',     label: 'Answer',     type: 'textarea', required: true },
-                { key: 'sort_order', label: 'Sort Order', type: 'number'  },
-              ]}
-              onAdded={fetchAll}
-            />
+          <FaqLibraryPicker
+            locationServiceId={id}
+            serviceSlug={s(ls.service_slug)}
+            serviceCategory={s(ls.service_category)}
+            citySlug={s(ls.city_slug)}
+            areaSlug={s(ls.area_slug)}
+            existing={faqs}
+            onRefresh={syncFaqs}
+          />
+
+          <SectionHeader title="Service FAQs" count={faqs.length}>
+            <span className="text-xs text-[#6b7280]">Edit or remove added FAQs below</span>
           </SectionHeader>
-          {faqs.length === 0 && <Empty>No FAQs yet.</Empty>}
+          {faqs.length === 0 && <Empty>No FAQs yet. Choose from the library or create a specific FAQ above.</Empty>}
           {faqs.map(row => (
             <ChildRow key={s(row.id)} row={row} table="ls_faqs"
               preview={s(row.question).slice(0, 80)}
@@ -431,7 +450,7 @@ export default function LSEditorPage() {
                 { key: 'answer',     label: 'Answer',     type: 'textarea'},
                 { key: 'sort_order', label: 'Sort Order', type: 'number'  },
               ]}
-              onSave={fetchAll}
+              onSave={syncFaqs}
             />
           ))}
         </div>
@@ -450,28 +469,32 @@ export default function LSEditorPage() {
       {/* ══════════════ RELATED SERVICES ══════════════ */}
       {tab === 'related' && (
         <div className="space-y-4">
-          <SectionHeader title="Related Services" count={related.length}>
-            <AddBtn table="ls_related_services" parentKey="location_service_id" parentId={id}
-              fields={[
-                { key: 'name',       label: 'Service Name', type: 'text', required: true },
-                { key: 'slug',       label: 'Service Slug', type: 'text', required: true },
-                { key: 'category',   label: 'Category',     type: 'text' },
-                { key: 'sort_order', label: 'Sort Order',   type: 'number' },
-              ]}
-              onAdded={fetchAll}
-            />
+          <RelatedServicePicker
+            locationServiceId={id}
+            citySlug={s(ls.city_slug)}
+            areaSlug={s(ls.area_slug)}
+            currentServiceSlug={s(ls.service_slug)}
+            isCityLevel={Boolean(ls.is_city_level)}
+            existing={related}
+            onRefresh={syncRelatedServices}
+          />
+
+          <SectionHeader title="Selected Related Services" count={related.length}>
+            <span className="text-xs text-[#6b7280]">Edit order or remove selections below</span>
           </SectionHeader>
-          {related.length === 0 && <Empty>No related services yet.</Empty>}
+          {related.length === 0 && <Empty>No related services selected yet.</Empty>}
           {related.map(row => (
             <ChildRow key={s(row.id)} row={row} table="ls_related_services"
-              preview={`${s(row.name)} → /${s(ls.city_slug)}/${s(row.slug)}`}
+              preview={`${s(row.name)} → ${Boolean(ls.is_city_level)
+                ? `/${s(ls.city_slug)}/${s(row.slug)}`
+                : `/${s(ls.city_slug)}/${s(ls.area_slug)}/${s(row.slug)}`}`}
               fields={[
                 { key: 'name',       label: 'Service Name', type: 'text'   },
                 { key: 'slug',       label: 'Service Slug', type: 'text'   },
                 { key: 'category',   label: 'Category',     type: 'text'   },
                 { key: 'sort_order', label: 'Sort Order',   type: 'number' },
               ]}
-              onSave={fetchAll}
+              onSave={syncRelatedServices}
             />
           ))}
         </div>
@@ -484,42 +507,6 @@ export default function LSEditorPage() {
           images={images}
           onRefresh={fetchAll}
         />
-      )}
-
-      {/* ══════════════ REVIEWS ══════════════ */}
-      {tab === 'reviews' && (
-        <div className="space-y-4">
-          <SectionHeader title="Review Sources" count={reviews.length}>
-            <AddBtn table="review_sources" parentKey="ls_id" parentId={id}
-              fields={[
-                { key: 'author_name', label: 'Author Name',  type: 'text',    required: true },
-                { key: 'rating',      label: 'Rating (1-5)', type: 'number',  required: true },
-                { key: 'body',        label: 'Review Text',  type: 'textarea', required: true },
-                { key: 'vehicle',     label: 'Vehicle',      type: 'text'    },
-                { key: 'location',    label: 'Location',     type: 'text'    },
-                { key: 'source',      label: 'Source (manual/google/justdial)', type: 'text' },
-                { key: 'external_id', label: 'External ID',  type: 'text'    },
-              ]}
-              onAdded={fetchAll}
-            />
-          </SectionHeader>
-          {reviews.length === 0 && <Empty>No review sources yet.</Empty>}
-          {reviews.map(row => (
-            <ChildRow key={s(row.id)} row={row} table="review_sources"
-              preview={`${s(row.author_name)} — ${s(row.rating)}★ [${s(row.source)}] — ${s(row.body).slice(0,60)}…`}
-              fields={[
-                { key: 'author_name', label: 'Author Name', type: 'text'    },
-                { key: 'rating',      label: 'Rating',      type: 'number'  },
-                { key: 'body',        label: 'Review',      type: 'textarea'},
-                { key: 'vehicle',     label: 'Vehicle',     type: 'text'    },
-                { key: 'location',    label: 'Location',    type: 'text'    },
-                { key: 'source',      label: 'Source',      type: 'text'    },
-                { key: 'verified',    label: 'Verified',    type: 'boolean' },
-              ]}
-              onSave={fetchAll}
-            />
-          ))}
-        </div>
       )}
 
       {/* ══════════════ SCHEMA ══════════════ */}
