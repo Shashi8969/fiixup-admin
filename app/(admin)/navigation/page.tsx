@@ -87,7 +87,7 @@ const EMPTY_FORM: NavForm = {
   scope_city_slug: '',
   scope_area_slug: '',
   scope_path: '',
-  link_mode: 'manual',
+  link_mode: 'db_page',
   target_type: '',
   target_id: '',
 }
@@ -121,6 +121,33 @@ function normalizeHref(href: string) {
   if (!value) return ''
   if (/^(https?:|tel:|mailto:|#)/i.test(value)) return value
   return cleanPath(value)
+}
+
+const STATIC_PUBLIC_PATHS = new Set([
+  '/',
+  '/services',
+  '/about',
+  '/blog',
+  '/faq',
+  '/contact',
+  '/privacy-policy',
+])
+
+function isExternalLikeHref(value: string) {
+  return /^(https?:|tel:|mailto:|#)/i.test(value.trim())
+}
+
+function hrefPathForValidation(value: string) {
+  const normalized = normalizeHref(value)
+  if (!normalized || isExternalLikeHref(normalized)) return normalized
+  return normalized.split(/[?#]/, 1)[0] || '/'
+}
+
+function isKnownPublicHref(value: string, options: LinkOption[]) {
+  if (isExternalLikeHref(value)) return true
+  const candidate = hrefPathForValidation(value)
+  if (STATIC_PUBLIC_PATHS.has(candidate)) return true
+  return options.some((option) => hrefPathForValidation(option.href) === candidate)
 }
 
 function getAreaLabel(area: unknown) {
@@ -465,6 +492,29 @@ export default function NavigationManagerPage() {
     if (payload.scope_type === 'city' && !payload.scope_city_slug) return 'Choose city for city-scoped link.'
     if (payload.scope_type === 'area' && (!payload.scope_city_slug || !payload.scope_area_slug)) return 'Choose city and area for area-scoped link.'
     if (payload.scope_type === 'path' && !payload.scope_path) return 'Enter exact page path for path-scoped link.'
+
+    if (payload.is_active && !isKnownPublicHref(payload.href, linkOptions)) {
+      return `This internal URL is not an active public page: ${hrefPathForValidation(payload.href)}`
+    }
+
+    if (
+      payload.is_active &&
+      payload.scope_type === 'path' &&
+      payload.scope_path &&
+      !isKnownPublicHref(payload.scope_path, linkOptions)
+    ) {
+      return `The selected scope path is not an active public page: ${hrefPathForValidation(payload.scope_path)}`
+    }
+
+    if (payload.link_mode === 'db_page') {
+      const selectedTargetExists = linkOptions.some((option) =>
+        option.target_type === payload.target_type &&
+        String(option.target_id ?? '') === String(payload.target_id ?? '') &&
+        hrefPathForValidation(option.href) === hrefPathForValidation(payload.href)
+      )
+      if (!selectedTargetExists) return 'Choose a valid active page from the database list.'
+    }
+
     return null
   }
 
