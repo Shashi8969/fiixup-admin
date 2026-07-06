@@ -1,22 +1,22 @@
 'use client'
 // app/(admin)/media/page.tsx
 // Full Media Library — browse folders, upload images, edit metadata
-// Bucket: images (public, 50MB limit)
-// Folders: cities/ services/ blog/ og/ team/ location-services/ general/
-// Table: media_library (stores metadata for every image)
+// NEW: "Crop & Upload" button opens ImageCropUploadModal (crop → compress → upload)
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast }        from '@/components/ui/Toast'
 import {
   Upload, FolderOpen, Image as ImageIcon, Check,
-  Loader2, Search, RefreshCw, Grid, List,
+  Loader2, Search, RefreshCw, Grid, List, Crop,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { FOLDERS, type FolderId, type MediaItem, type UploadForm, type WebpUploadSettings } from '@/components/media/types'
-import { MediaDetailsPanel } from '@/components/media/MediaDetailsPanel'
-import { MediaUploadModal } from '@/components/media/MediaUploadModal'
-import { formatSize } from '@/utils/media/formatSize'
+import { MediaDetailsPanel }    from '@/components/media/MediaDetailsPanel'
+import { MediaUploadModal }     from '@/components/media/MediaUploadModal'
+// ↓ NEW import
+import { ImageCropUploadModal } from '@/components/media/ImageCropUploadModal'
+import { formatSize }           from '@/utils/media/formatSize'
 import {
   cleanFileBaseName,
   compressImageToWebp,
@@ -44,7 +44,9 @@ export default function MediaLibraryPage() {
   const [dragOver,   setDragOver]   = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Upload form state
+  // ── NEW: controls ImageCropUploadModal ─────────────────────────────────────
+  const [showCropUpload, setShowCropUpload] = useState(false)
+
   const [uploadForm, setUploadForm] = useState<UploadForm>({
     title: '', alt_text: '', description: '',
     meta_title: '', meta_description: '', caption: '', tags: '',
@@ -52,12 +54,10 @@ export default function MediaLibraryPage() {
 
   const [webpSettings, setWebpSettings] = useState<WebpUploadSettings>(DEFAULT_WEBP_COMPRESSION_SETTINGS)
 
-  // Edit metadata state
   const [editing,    setEditing]    = useState(false)
   const [editForm,   setEditForm]   = useState<Partial<MediaItem>>({})
   const [savingMeta, setSavingMeta] = useState(false)
 
-  // ── Fetch images from media_library table ─────────────────────────────────
   const fetchItems = useCallback(async () => {
     setLoading(true)
     let q = sb.from('media_library').select('*').order('created_at', { ascending: false })
@@ -72,9 +72,8 @@ export default function MediaLibraryPage() {
   useEffect(() => { fetchItems() }, [fetchItems])
 
   const buildUniqueStoragePath = useCallback(async (fileName: string) => {
-    const ext = getFileExtension(fileName)
+    const ext  = getFileExtension(fileName)
     const base = cleanFileBaseName(fileName)
-
     for (let i = 1; i <= 20; i++) {
       const finalName = i === 1 ? `${base}.${ext}` : `${base}-${i}.${ext}`
       const path = `${uploadFolder}/${finalName}`
@@ -83,30 +82,18 @@ export default function MediaLibraryPage() {
         .select('id')
         .eq('storage_path', path)
         .maybeSingle()
-
       if (!data) return path
     }
-
     return `${uploadFolder}/${base}-${Date.now()}.${ext}`
   }, [uploadFolder])
 
-  // ── Upload handler with optional PNG/JPG → WebP compression ────────────────
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
     setUploading(true)
-
     try {
       for (const file of Array.from(files)) {
-        if (!file.type.startsWith('image/')) {
-          showToast('error', `${file.name} is not an image`)
-          continue
-        }
-
-        if (file.size > MAX_UPLOAD_SIZE) {
-          showToast('error', `${file.name} exceeds 50MB limit`)
-          continue
-        }
-
+        if (!file.type.startsWith('image/')) { showToast('error', `${file.name} is not an image`); continue }
+        if (file.size > MAX_UPLOAD_SIZE) { showToast('error', `${file.name} exceeds 50MB limit`); continue }
         let prepared: PreparedImageUpload
         try {
           prepared = await compressImageToWebp(file, webpSettings)
@@ -114,22 +101,13 @@ export default function MediaLibraryPage() {
           showToast('error', error instanceof Error ? error.message : `Could not compress ${file.name}`)
           continue
         }
-
-        if (prepared.file.size > MAX_UPLOAD_SIZE) {
-          showToast('error', `${prepared.fileName} exceeds 50MB limit after compression`)
-          continue
-        }
-
+        if (prepared.file.size > MAX_UPLOAD_SIZE) { showToast('error', `${prepared.fileName} exceeds 50MB limit after compression`); continue }
         const path = await buildUniqueStoragePath(prepared.fileName)
-
         const { error: uploadError } = await sb.storage
           .from('images')
           .upload(path, prepared.file, { cacheControl: '3600', upsert: false })
-
         if (uploadError) { showToast('error', uploadError.message); continue }
-
         const publicUrl = `${BUCKET_PUBLIC_URL}/${path}`
-
         const { error: dbError } = await sb.from('media_library').insert({
           storage_path:     path,
           public_url:       publicUrl,
@@ -151,7 +129,6 @@ export default function MediaLibraryPage() {
           focal_x:          50,
           focal_y:          50,
         })
-
         if (dbError) {
           showToast('error', `Metadata error: ${dbError.message}`)
         } else if (prepared.convertedToWebp) {
@@ -169,7 +146,6 @@ export default function MediaLibraryPage() {
     }
   }
 
-  // ── Save metadata edits ────────────────────────────────────────────────────
   const saveMeta = async () => {
     if (!selected) return
     setSavingMeta(true)
@@ -184,18 +160,17 @@ export default function MediaLibraryPage() {
     fetchItems()
   }
 
-  // ── Delete ────────────────────────────────────────────────────────────────
-  const deleteItem = async (item: MediaItem) => {
-    if (!confirm(`Delete "${item.file_name}"? This cannot be undone.`)) return
-    await sb.storage.from('images').remove([item.storage_path])
-    const { error } = await sb.from('media_library').delete().eq('id', item.id)
-    if (error) { showToast('error', error.message); return }
+  const deleteItem = async () => {
+    if (!selected) return
+    const { error: storageErr } = await sb.storage.from('images').remove([selected.storage_path])
+    if (storageErr) { showToast('error', storageErr.message); return }
+    const { error: dbErr } = await sb.from('media_library').delete().eq('id', selected.id)
+    if (dbErr) { showToast('error', dbErr.message); return }
     showToast('success', 'Image deleted')
     setSelected(null)
     fetchItems()
   }
 
-  // ── Copy URL ──────────────────────────────────────────────────────────────
   const copyUrl = (url: string) => {
     navigator.clipboard.writeText(url)
     showToast('success', 'URL copied to clipboard')
@@ -233,11 +208,25 @@ export default function MediaLibraryPage() {
           ))}
         </div>
 
-        {/* Upload button */}
-        <div className="p-4 border-t border-[#1e2535]">
-          <button onClick={() => { setShowUpload(true); setUploadFolder(folder === 'all' ? 'general' : folder) }}
-            className="admin-btn-primary w-full justify-center text-xs">
-            <Upload className="w-3.5 h-3.5" /> Upload Image
+        {/* Upload buttons */}
+        <div className="p-4 border-t border-[#1e2535] flex flex-col gap-2">
+          {/* ── NEW: Crop & Upload button ── */}
+          <button
+            onClick={() => {
+              setUploadFolder(folder === 'all' ? 'general' : folder)
+              setShowCropUpload(true)
+            }}
+            className="admin-btn-primary w-full justify-center text-xs"
+          >
+            <Crop className="w-3.5 h-3.5" /> Crop & Upload
+          </button>
+
+          {/* Original quick-upload (no crop) */}
+          <button
+            onClick={() => { setShowUpload(true); setUploadFolder(folder === 'all' ? 'general' : folder) }}
+            className="admin-btn-secondary w-full justify-center text-xs"
+          >
+            <Upload className="w-3.5 h-3.5" /> Quick Upload
           </button>
         </div>
       </div>
@@ -245,7 +234,6 @@ export default function MediaLibraryPage() {
       {/* ── CENTER: Image grid ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1e2535] bg-[#0f1117]">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
@@ -268,7 +256,6 @@ export default function MediaLibraryPage() {
           </div>
         </div>
 
-        {/* Drop zone overlay */}
         <div
           className={clsx('flex-1 overflow-y-auto p-4 relative', dragOver && 'ring-2 ring-blue-500 ring-inset')}
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
@@ -280,7 +267,6 @@ export default function MediaLibraryPage() {
               <p className="text-blue-400 text-lg font-semibold">Drop images here to upload</p>
             </div>
           )}
-
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
@@ -289,7 +275,7 @@ export default function MediaLibraryPage() {
             <div className="flex flex-col items-center justify-center h-64 text-[#6b7280]">
               <ImageIcon className="w-12 h-12 mb-3 opacity-30" />
               <p className="text-sm">No images in this folder.</p>
-              <p className="text-xs mt-1">Click "Upload Image" or drag & drop files here.</p>
+              <p className="text-xs mt-1">Click "Crop & Upload" or drag & drop files here.</p>
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
@@ -357,7 +343,7 @@ export default function MediaLibraryPage() {
         />
       )}
 
-      {/* ── UPLOAD MODAL ── */}
+      {/* ── Original quick-upload modal (no crop) ── */}
       {showUpload && (
         <MediaUploadModal
           fileRef={fileRef}
@@ -370,6 +356,20 @@ export default function MediaLibraryPage() {
           uploading={uploading}
           onClose={() => setShowUpload(false)}
           onUpload={handleUpload}
+        />
+      )}
+
+      {/* ── NEW: Crop & Upload modal ── */}
+      {showCropUpload && (
+        <ImageCropUploadModal
+          uploadFolder={uploadFolder}
+          onSuccess={(_item) => {
+            fetchItems()
+            // Keep modal open so user can upload another if wanted;
+            // modal has its own "Done" / "Upload another" buttons.
+            // Or to auto-close: setShowCropUpload(false)
+          }}
+          onClose={() => setShowCropUpload(false)}
         />
       )}
     </div>
