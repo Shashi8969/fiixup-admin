@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { clsx } from 'clsx'
-import { ArrowLeft, ExternalLink, FileText, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ClipboardPaste, ExternalLink, FileText, Loader2, RefreshCw } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
 import { BlockEditor } from '@/components/posts/editor/BlockEditor'
+import { ImportContentModal } from '@/components/posts/editor/ImportContentModal'
+import { LinkOptionsProvider } from '@/components/posts/editor/LinkOptionsContext'
 import { PostAttachmentsEditor } from '@/components/posts/editor/BlogAttachmentEditors'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { SeoMetaPanel } from '@/components/seo/SeoMetaPanel'
@@ -163,39 +166,57 @@ export function ContentTab({ post, blocks, setBlocks, saving, saveBlocks, save }
   saveBlocks: (blocks: Block[]) => void
   save: SaveFn
 }) {
-  return (
-    <div className="space-y-5">
-      <div className="admin-card p-5 space-y-4">
-        <h2 className="admin-section-title">Post Info</h2>
-        <Field label="Title"       value={String(post.title       ?? '')} onSave={save('title')} />
-        <Field label="Author"      value={String(post.author      ?? '')} onSave={save('author')} />
-        <Field label="Author Role" value={String(post.author_role ?? '')} onSave={save('author_role')} />
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Date (display, e.g. January 15, 2025)" value={String(post.date      ?? '')} onSave={save('date')} />
-          <Field label="Read Time (e.g. 5 min read)"           value={String(post.read_time ?? '')} onSave={save('read_time')} />
-        </div>
-        <Field label="Category" value={String(post.category ?? '')} onSave={save('category')} />
-      </div>
+  const [showImport, setShowImport] = useState(false)
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-base font-semibold text-[#e2e8f0]">Content Blocks</h2>
-        <div className="flex gap-2">
-          <button onClick={() => saveBlocks(blocks)} disabled={saving} className="admin-btn-primary text-xs">
+  return (
+    <LinkOptionsProvider>
+      <div className="space-y-5">
+        <div className="admin-card p-5 space-y-4">
+          <h2 className="admin-section-title">Post Info</h2>
+          <Field label="Title"       value={String(post.title       ?? '')} onSave={save('title')} />
+          <Field label="Author"      value={String(post.author      ?? '')} onSave={save('author')} />
+          <Field label="Author Role" value={String(post.author_role ?? '')} onSave={save('author_role')} />
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Date (display, e.g. January 15, 2025)" value={String(post.date      ?? '')} onSave={save('date')} />
+            <Field label="Read Time (e.g. 5 min read)"           value={String(post.read_time ?? '')} onSave={save('read_time')} />
+          </div>
+          <Field label="Category" value={String(post.category ?? '')} onSave={save('category')} />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-base font-semibold text-[#e2e8f0]">Content Blocks</h2>
+          <div className="flex gap-2">
+            <button onClick={() => setShowImport(true)} className="admin-btn-secondary text-xs">
+              <ClipboardPaste className="w-4 h-4" /> Paste / Import Content
+            </button>
+            <button onClick={() => saveBlocks(blocks)} disabled={saving} className="admin-btn-primary text-xs">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Save Content
+            </button>
+          </div>
+        </div>
+
+        {showImport && (
+          <ImportContentModal
+            hasExistingBlocks={blocks.length > 0}
+            onClose={() => setShowImport(false)}
+            onInsert={(newBlocks, mode) => {
+              setBlocks(mode === 'replace' ? newBlocks : [...blocks, ...newBlocks])
+              setShowImport(false)
+            }}
+          />
+        )}
+
+        <BlockEditor blocks={blocks} onChange={setBlocks} />
+
+        <div className="flex justify-end">
+          <button onClick={() => saveBlocks(blocks)} disabled={saving} className="admin-btn-primary">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Save Content
+            Save All Content
           </button>
         </div>
       </div>
-
-      <BlockEditor blocks={blocks} onChange={setBlocks} />
-
-      <div className="flex justify-end">
-        <button onClick={() => saveBlocks(blocks)} disabled={saving} className="admin-btn-primary">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          Save All Content
-        </button>
-      </div>
-    </div>
+    </LinkOptionsProvider>
   )
 }
 

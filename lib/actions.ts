@@ -5,6 +5,7 @@
 
 import { getServiceClient } from './supabase'
 import { revalidatePath as nextRevalidatePath } from 'next/cache'
+import { sanitizeWriteData } from './validation'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ export async function saveCity(
   const sb = getServiceClient()
   const { error } = await sb
     .from('cities')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
     .eq('id', cityId)
 
   if (error) return { success: false, error: error.message }
@@ -62,7 +63,7 @@ export async function saveCityTestimonial(
   const sb = getServiceClient()
   const { error } = await sb
     .from('city_testimonials')
-    .update(data)
+    .update(sanitizeWriteData(data))
     .eq('id', testimonialId)
 
   if (error) return { success: false, error: error.message }
@@ -78,7 +79,7 @@ export async function addCityTestimonial(
   const sb = getServiceClient()
   const { error } = await sb
     .from('city_testimonials')
-    .insert({ ...data, city_id: cityId, source: 'manual', verified: true })
+    .insert({ ...sanitizeWriteData(data), city_id: cityId, source: 'manual', verified: true })
 
   if (error) return { success: false, error: error.message }
   await revalidateMainSite([`/${citySlug}`])
@@ -108,7 +109,7 @@ export async function saveCityFaq(
   const sb = getServiceClient()
   const { error } = await sb
     .from('city_faqs')
-    .update(data)
+    .update(sanitizeWriteData(data))
     .eq('id', faqId)
 
   if (error) return { success: false, error: error.message }
@@ -124,7 +125,7 @@ export async function addCityFaq(
   const sb = getServiceClient()
   const { error } = await sb
     .from('city_faqs')
-    .insert({ ...data, city_id: cityId })
+    .insert({ ...sanitizeWriteData(data), city_id: cityId })
 
   if (error) return { success: false, error: error.message }
   await revalidateMainSite([`/${citySlug}`])
@@ -154,7 +155,7 @@ export async function saveLocationService(
   const sb = getServiceClient()
   const { error } = await sb
     .from('location_services')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
     .eq('id', lsId)
 
   if (error) return { success: false, error: error.message }
@@ -176,7 +177,7 @@ export async function saveLsPricingRow(
   const sb = getServiceClient()
   const { error } = await sb
     .from('ls_pricing_rows')
-    .update(data)
+    .update(sanitizeWriteData(data))
     .eq('id', rowId)
 
   if (error) return { success: false, error: error.message }
@@ -195,7 +196,7 @@ export async function addLsPricingRow(
   const sb = getServiceClient()
   const { error } = await sb
     .from('ls_pricing_rows')
-    .insert({ ...data, location_service_id: lsId })
+    .insert({ ...sanitizeWriteData(data), location_service_id: lsId })
 
   if (error) return { success: false, error: error.message }
   await sb.from('location_services').update({ updated_at: new Date().toISOString() }).eq('id', lsId)
@@ -225,7 +226,7 @@ export async function saveLsTestimonial(
   data: Record<string, unknown>
 ): Promise<ActionResult> {
   const sb = getServiceClient()
-  const { error } = await sb.from('ls_testimonials').update(data).eq('id', testId)
+  const { error } = await sb.from('ls_testimonials').update(sanitizeWriteData(data)).eq('id', testId)
   if (error) return { success: false, error: error.message }
   await sb.from('location_services').update({ updated_at: new Date().toISOString() }).eq('id', lsId)
   await revalidateMainSite([`/${citySlug}/${serviceSlug}`])
@@ -241,7 +242,7 @@ export async function addLsTestimonial(
   const sb = getServiceClient()
   const { error } = await sb
     .from('ls_testimonials')
-    .insert({ ...data, location_service_id: lsId, source: 'manual', verified: true })
+    .insert({ ...sanitizeWriteData(data), location_service_id: lsId, source: 'manual', verified: true })
 
   if (error) return { success: false, error: error.message }
   await sb.from('location_services').update({ updated_at: new Date().toISOString() }).eq('id', lsId)
@@ -271,7 +272,7 @@ export async function saveLsFaq(
   data: Record<string, unknown>
 ): Promise<ActionResult> {
   const sb = getServiceClient()
-  const { error } = await sb.from('ls_faqs').update(data).eq('id', faqId)
+  const { error } = await sb.from('ls_faqs').update(sanitizeWriteData(data)).eq('id', faqId)
   if (error) return { success: false, error: error.message }
   await sb.from('location_services').update({ updated_at: new Date().toISOString() }).eq('id', lsId)
   await revalidateMainSite([`/${citySlug}/${serviceSlug}`])
@@ -287,7 +288,7 @@ export async function addLsFaq(
   const sb = getServiceClient()
   const { error } = await sb
     .from('ls_faqs')
-    .insert({ ...data, location_service_id: lsId })
+    .insert({ ...sanitizeWriteData(data), location_service_id: lsId })
 
   if (error) return { success: false, error: error.message }
   await sb.from('location_services').update({ updated_at: new Date().toISOString() }).eq('id', lsId)
@@ -320,7 +321,7 @@ export async function saveCityServicePage(
   const sb = getServiceClient()
   const { error } = await sb
     .from('city_service_pages')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
     .eq('id', cspId)
 
   if (error) return { success: false, error: error.message }
@@ -336,7 +337,7 @@ export async function saveCspPricingRow(
   data: Record<string, unknown>
 ): Promise<ActionResult> {
   const sb = getServiceClient()
-  const { error } = await sb.from('csp_pricing_rows').update(data).eq('id', rowId)
+  const { error } = await sb.from('csp_pricing_rows').update(sanitizeWriteData(data)).eq('id', rowId)
   if (error) return { success: false, error: error.message }
   await sb.from('city_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', cspId)
   await revalidateMainSite([`/${citySlug}/services/${categorySlug}`])
@@ -352,7 +353,7 @@ export async function addCspPricingRow(
   const sb = getServiceClient()
   const { error } = await sb
     .from('csp_pricing_rows')
-    .insert({ ...data, city_service_page_id: cspId })
+    .insert({ ...sanitizeWriteData(data), city_service_page_id: cspId })
 
   if (error) return { success: false, error: error.message }
   await sb.from('city_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', cspId)
@@ -382,7 +383,7 @@ export async function saveCspFaq(
   data: Record<string, unknown>
 ): Promise<ActionResult> {
   const sb = getServiceClient()
-  const { error } = await sb.from('csp_faqs').update(data).eq('id', faqId)
+  const { error } = await sb.from('csp_faqs').update(sanitizeWriteData(data)).eq('id', faqId)
   if (error) return { success: false, error: error.message }
   await sb.from('city_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', cspId)
   await revalidateMainSite([`/${citySlug}/services/${categorySlug}`])
@@ -398,7 +399,7 @@ export async function addCspFaq(
   const sb = getServiceClient()
   const { error } = await sb
     .from('csp_faqs')
-    .insert({ ...data, city_service_page_id: cspId })
+    .insert({ ...sanitizeWriteData(data), city_service_page_id: cspId })
 
   if (error) return { success: false, error: error.message }
   await sb.from('city_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', cspId)
@@ -428,7 +429,7 @@ export async function saveCspTestimonial(
   data: Record<string, unknown>
 ): Promise<ActionResult> {
   const sb = getServiceClient()
-  const { error } = await sb.from('csp_testimonials').update(data).eq('id', testId)
+  const { error } = await sb.from('csp_testimonials').update(sanitizeWriteData(data)).eq('id', testId)
   if (error) return { success: false, error: error.message }
   await sb.from('city_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', cspId)
   await revalidateMainSite([`/${citySlug}/services/${categorySlug}`])
@@ -444,7 +445,7 @@ export async function addCspTestimonial(
   const sb = getServiceClient()
   const { error } = await sb
     .from('csp_testimonials')
-    .insert({ ...data, city_service_page_id: cspId, source: 'manual', verified: true })
+    .insert({ ...sanitizeWriteData(data), city_service_page_id: cspId, source: 'manual', verified: true })
 
   if (error) return { success: false, error: error.message }
   await sb.from('city_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', cspId)
@@ -476,7 +477,7 @@ export async function savePost(
   const sb = getServiceClient()
   const { error } = await sb
     .from('posts')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
     .eq('id', postId)
 
   if (error) return { success: false, error: error.message }
@@ -494,7 +495,7 @@ export async function saveService(
   const sb = getServiceClient()
   const { error } = await sb
     .from('services')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
     .eq('id', serviceId)
 
   if (error) return { success: false, error: error.message }

@@ -37,10 +37,12 @@ export async function middleware(request: NextRequest) {
   )
 
   // ── Check session ──────────────────────────────────────────────────────────
-  // Use getSession() instead of getUser() — faster, no network round-trip
-  const { data: { session } } = await supabase.auth.getSession()
+  // getUser() re-validates the token against the Auth server on every request.
+  // getSession() only decodes the cookie locally and does not verify it, so a
+  // tampered/forged cookie could otherwise pass this check.
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     const loginUrl = new URL('/login', request.url)
     // Only set ?next= for non-root paths to avoid loops
     if (pathname !== '/' && pathname !== '/dashboard') {

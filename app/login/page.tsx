@@ -3,6 +3,7 @@
 import { useState, Suspense }            from 'react'
 import { useRouter, useSearchParams }    from 'next/navigation'
 import { getBrowserClient }           from '@/lib/supabase'
+import { registerAdminAccount }       from '@/lib/auth-actions'
 import {
   Wrench, Loader2, Eye, EyeOff,
   Shield, Zap, Lock, UserPlus,
@@ -92,22 +93,21 @@ function LoginInner() {
     // Validate
     if (regPassword !== regConfirm) { setError('Passwords do not match.'); return }
     if (regPassword.length < 8)    { setError('Password must be at least 8 characters.'); return }
-    if (adminSecret !== process.env.NEXT_PUBLIC_ADMIN_INVITE_SECRET) {
-      setError('Invalid admin invite code. Ask the site owner for the code.'); return
-    }
 
     setLoading(true)
     try {
-      const sb = getBrowserClient()
-      const { error: authError } = await sb.auth.signUp({
-        email:    regEmail.trim(),
-        password: regPassword,
-        options:  { data: { full_name: regName } },
+      // Invite-code check and account creation both happen server-side —
+      // the secret is never sent to or stored in the browser.
+      const result = await registerAdminAccount({
+        fullName:   regName.trim(),
+        email:      regEmail.trim(),
+        password:   regPassword,
+        inviteCode: adminSecret,
       })
-      if (authError) { setError(authError.message); setLoading(false); return }
-      setSuccess('Account created! Check your email to confirm, then sign in.')
+      if (!result.success) { setError(result.error); setLoading(false); return }
+      setSuccess(result.message)
       setLoading(false)
-      setTimeout(() => reset('login'), 4000)
+      setTimeout(() => reset('login'), 3000)
     } catch { setError('Unexpected error.'); setLoading(false) }
   }
 
@@ -391,7 +391,7 @@ function LoginInner() {
                     onBlur={(e)  => (e.target.style.borderColor = '#1e2535')}
                   />
                   <p style={{ color: '#475569', fontSize: '11px', marginTop: '6px' }}>
-                    Set <code style={{ color: '#60a5fa' }}>NEXT_PUBLIC_ADMIN_INVITE_SECRET</code> in your <code style={{ color: '#60a5fa' }}>.env.local</code> to control who can register.
+                    Set <code style={{ color: '#60a5fa' }}>ADMIN_INVITE_SECRET</code> (server-only, no <code style={{ color: '#60a5fa' }}>NEXT_PUBLIC_</code> prefix) in your <code style={{ color: '#60a5fa' }}>.env.local</code> to control who can register.
                   </p>
                 </div>
 

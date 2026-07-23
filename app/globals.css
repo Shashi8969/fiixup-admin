@@ -87,4 +87,27 @@
     @apply text-[#94a3b8] hover:text-white hover:bg-[#2a2d3e] rounded-lg transition-colors;
   }
 
+  /* ── RichTextField (TipTap) ── */
+  .rt-editor, .rt-editor-compact {
+    @apply px-3;
+  }
+  .rt-editor { @apply py-2 min-h-[100px]; }
+  .rt-editor-compact { @apply py-1.5 min-h-[70px]; }
+  .rt-content {
+    @apply outline-none text-sm leading-relaxed text-[#e2e8f0];
+  }
+  .rt-content p { margin: 0; }
+  .rt-content a { @apply text-blue-400 underline; }
+  .rt-content code {
+    @apply bg-[#0f1117] border border-[#2a2d3e] rounded px-1 py-0.5 text-[0.85em];
+  }
+  .rt-content p.is-editor-empty::before,
+  .rt-content.is-editor-empty::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: #4b5563;
+  }
+
 }

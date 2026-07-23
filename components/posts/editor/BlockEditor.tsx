@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import type { Block } from '@/components/posts/editor/types'
 import { defaultBlock, uid } from '@/utils/posts/blockUtils'
+import { RichTextField } from '@/components/posts/editor/RichTextField'
+import { MediaLibraryPickerModal, type PickedMedia } from '@/components/media/MediaLibraryPickerModal'
 
 const BLOCK_TYPES = [
   { type: 'heading',      icon: Type,          label: 'Heading',      color: 'text-purple-400' },
@@ -136,6 +138,7 @@ function BlockCard({ block, index, total, onUpdate, onRemove, onMove }: {
 
 function BlockFields({ block, onUpdate }: { block: Block; onUpdate: (b: Block) => void }) {
   const set = (k: string, v: unknown) => onUpdate({ ...block, [k]: v })
+  const [showMediaPicker, setShowMediaPicker] = useState(false)
 
   switch (block.type) {
     case 'heading':
@@ -148,7 +151,7 @@ function BlockFields({ block, onUpdate }: { block: Block; onUpdate: (b: Block) =
         </div>
       )
     case 'paragraph':
-      return <textarea className="admin-textarea w-full min-h-[100px]" value={String(block.content ?? '')} onChange={(e) => set('content', e.target.value)} placeholder="Paragraph… (HTML allowed: <strong>, <em>, <a href=''>)" />
+      return <RichTextField value={String(block.content ?? '')} onChange={(html) => set('content', html)} placeholder="Paragraph…" />
     case 'list':
       return (
         <div className="space-y-3">
@@ -166,13 +169,18 @@ function BlockFields({ block, onUpdate }: { block: Block; onUpdate: (b: Block) =
       return (
         <div className="space-y-3">
           <input className="admin-input w-full" value={String(block.label ?? '')} onChange={(e) => set('label', e.target.value)} placeholder={block.type === 'tip' ? 'Label (e.g. Fiixup Tip)' : 'Label (e.g. Important)'} />
-          <textarea className="admin-textarea w-full min-h-[80px]" value={String(block.content ?? '')} onChange={(e) => set('content', e.target.value)} placeholder="Content… (HTML allowed)" />
+          <RichTextField value={String(block.content ?? '')} onChange={(html) => set('content', html)} placeholder="Content…" />
         </div>
       )
     case 'image':
       return (
         <div className="space-y-3">
-          <input className="admin-input w-full" value={String(block.url ?? '')} onChange={(e) => set('url', e.target.value)} placeholder="Image URL (Supabase storage or CDN)" />
+          <div className="flex gap-2">
+            <input className="admin-input flex-1" value={String(block.url ?? '')} onChange={(e) => set('url', e.target.value)} placeholder="Image URL (Supabase storage or CDN)" />
+            <button type="button" onClick={() => setShowMediaPicker(true)} className="admin-btn-secondary text-xs shrink-0">
+              <ImageIcon className="w-3.5 h-3.5" /> Browse Library
+            </button>
+          </div>
           <input className="admin-input w-full" value={String(block.alt ?? '')} onChange={(e) => set('alt', e.target.value)} placeholder="Alt text (required for SEO)" />
           <input className="admin-input w-full" value={String(block.caption ?? '')} onChange={(e) => set('caption', e.target.value)} placeholder="Caption (optional)" />
           {String(block.url ?? '') && (
@@ -180,12 +188,26 @@ function BlockFields({ block, onUpdate }: { block: Block; onUpdate: (b: Block) =
               <img src={String(block.url)} alt={String(block.alt ?? '')} className="max-h-40 object-contain rounded" />
             </div>
           )}
+          {showMediaPicker && (
+            <MediaLibraryPickerModal
+              onClose={() => setShowMediaPicker(false)}
+              onSelect={(item: PickedMedia) => {
+                onUpdate({
+                  ...block,
+                  url: item.public_url,
+                  alt: block.alt ? block.alt : (item.alt_text || item.title || ''),
+                  caption: block.caption ? block.caption : (item.caption || ''),
+                })
+                setShowMediaPicker(false)
+              }}
+            />
+          )}
         </div>
       )
     case 'quote':
       return (
         <div className="space-y-3">
-          <textarea className="admin-textarea w-full min-h-[80px]" value={String(block.content ?? '')} onChange={(e) => set('content', e.target.value)} placeholder="Quote text…" />
+          <RichTextField value={String(block.content ?? '')} onChange={(html) => set('content', html)} placeholder="Quote text…" />
           <input className="admin-input w-full" value={String(block.author ?? '')} onChange={(e) => set('author', e.target.value)} placeholder="Author (optional)" />
         </div>
       )
@@ -281,7 +303,7 @@ function FaqEditor({ items, onChange }: { items: { question: string; answer: str
           <div className="flex justify-between"><span className="text-xs text-[#6b7280] font-semibold">Q{i+1}</span>
             <button onClick={() => rem(i)} className="text-[#6b7280] hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button></div>
           <input className="admin-input w-full text-sm" value={item.question} onChange={(e) => upd(i, 'question', e.target.value)} placeholder="Question?" />
-          <textarea className="admin-textarea w-full min-h-[70px] text-sm" value={item.answer} onChange={(e) => upd(i, 'answer', e.target.value)} placeholder="Answer… (HTML allowed)" />
+          <RichTextField value={item.answer} onChange={(html) => upd(i, 'answer', html)} placeholder="Answer…" compact />
         </div>
       ))}
       <button onClick={() => onChange([...items, { question: '', answer: '' }])} className="text-xs text-blue-400 flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add FAQ item</button>
