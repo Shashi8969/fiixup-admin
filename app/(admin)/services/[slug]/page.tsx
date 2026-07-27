@@ -12,7 +12,7 @@ import { AdminBackButton }     from '@/components/navigation/AdminBackButton'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { ChildTableEditor }    from '@/components/editors/ChildTableEditor'
 import { LivePagePreview }     from '@/components/preview/LivePagePreview'
-import { ReviewLibraryPicker } from '@/components/location-services/editor/LocationServiceContentPickers'
+import { ReviewLibraryPicker, ServiceRelatedPicker } from '@/components/location-services/editor/LocationServiceContentPickers'
 import { publicSiteUrl }       from '@/lib/public-site'
 import { showToast }           from '@/components/ui/Toast'
 import { saveService }         from '@/lib/actions'
@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-const TABS = ['SEO', 'Schema', 'Details', 'Pricing', 'Features', 'FAQs', 'Testimonials', 'Brands', 'Preview'] as const
+const TABS = ['SEO', 'Schema', 'Details', 'Pricing', 'Features', 'FAQs', 'Testimonials', 'Related Services', 'Brands', 'Preview'] as const
 type Tab = typeof TABS[number]
 
 export default function ServiceEditorPage() {
@@ -279,6 +279,18 @@ export default function ServiceEditorPage() {
             scopeLabel: 'service',
           }}
           existing={svcTests}
+          onRefresh={fetchAll}
+        />
+      )}
+
+      {/* ── Related Services ── */}
+      {/* Picked from the live services catalog only — related_slugs stays a
+          plain array of real, existing slugs instead of hand-typed text. */}
+      {tab === 'Related Services' && (
+        <ServiceRelatedPicker
+          serviceId={String(svc.id)}
+          serviceSlug={serviceSlug}
+          relatedSlugs={Array.isArray(svc.related_slugs) ? (svc.related_slugs as string[]) : []}
           onRefresh={fetchAll}
         />
       )}

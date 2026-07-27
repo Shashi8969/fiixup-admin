@@ -13,6 +13,7 @@ import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
 import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import { ReviewLibraryPicker, CspRelatedServicePicker } from '@/components/location-services/editor/LocationServiceContentPickers'
 import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
@@ -20,7 +21,6 @@ import {
   saveCityServicePage,
   saveCspPricingRow,   addCspPricingRow,   deleteCspPricingRow,
   saveCspFaq,          addCspFaq,          deleteCspFaq,
-  saveCspTestimonial,  addCspTestimonial,  deleteCspTestimonial,
 } from '@/lib/actions'
 import {
   ArrowLeft, Globe, Layers, Loader2, RefreshCw,
@@ -31,8 +31,6 @@ import { clsx } from 'clsx'
 import {
   AddRowBtn,
   ChildRow,
-  DirectAddBtn,
-  DirectChildRow,
   Empty,
   JsonField,
   SectionHeader,
@@ -386,56 +384,19 @@ export default function CspEditorPage() {
       )}
 
       {/* ════════════ TESTIMONIALS ════════════ */}
+      {/* Picked from the shared review_sources library only — no free-text entry. */}
       {tab === 'testimonials' && (
-        <div className="space-y-4">
-          <SectionHeader title="Customer Testimonials" count={tests.length}>
-            <AddRowBtn
-              fields={[
-                { key: 'name',       label: 'Customer Name', type: 'text',    required: true },
-                { key: 'area',       label: 'Area',          type: 'text'    },
-                { key: 'vehicle',    label: 'Vehicle',       type: 'text'    },
-                { key: 'rating',     label: 'Rating (1-5)',  type: 'number',  required: true },
-                { key: 'body',       label: 'Review Text',   type: 'textarea', required: true },
-                { key: 'date_label', label: 'Date Label',    type: 'text'    },
-                { key: 'sort_order', label: 'Sort Order',    type: 'number'  },
-              ]}
-              onAdd={async data => {
-                const r = await addCspTestimonial(cspId, citySlug, categorySlug, data)
-                if (r.success) { fetchAll(); showToast('success', r.message) }
-                else showToast('error', r.error)
-                return r
-              }}
-            />
-          </SectionHeader>
-          {tests.length === 0 && <Empty>No testimonials yet.</Empty>}
-          {tests.map(row => (
-            <ChildRow key={s(row.id)} row={row}
-              preview={`${s(row.name)} — ${s(row.rating)}★ — ${s(row.body).slice(0,60)}…`}
-              fields={[
-                { key: 'name',       label: 'Name',        type: 'text'    },
-                { key: 'area',       label: 'Area',        type: 'text'    },
-                { key: 'vehicle',    label: 'Vehicle',     type: 'text'    },
-                { key: 'rating',     label: 'Rating',      type: 'number'  },
-                { key: 'body',       label: 'Review',      type: 'textarea'},
-                { key: 'date_label', label: 'Date Label',  type: 'text'    },
-                { key: 'verified',   label: 'Verified',    type: 'boolean' },
-                { key: 'sort_order', label: 'Sort Order',  type: 'number'  },
-              ]}
-              onSave={async (rowId, data) => {
-                const r = await saveCspTestimonial(rowId, cspId, citySlug, categorySlug, data)
-                if (r.success) { fetchAll(); showToast('success', r.message) }
-                else showToast('error', r.error)
-                return r
-              }}
-              onDelete={async rowId => {
-                const r = await deleteCspTestimonial(rowId, cspId, citySlug, categorySlug)
-                if (r.success) { fetchAll(); showToast('success', r.message) }
-                else showToast('error', r.error)
-                return r
-              }}
-            />
-          ))}
-        </div>
+        <ReviewLibraryPicker
+          target={{
+            table: 'csp_testimonials',
+            idColumn: 'city_service_page_id',
+            id: cspId,
+            locationField: 'area',
+            scopeLabel: 'category page',
+          }}
+          existing={tests}
+          onRefresh={fetchAll}
+        />
       )}
 
       {/* ════════════ FAQs ════════════ */}
@@ -483,38 +444,17 @@ export default function CspEditorPage() {
       )}
 
       {/* ════════════ RELATED SERVICES ════════════ */}
+      {/* Picked from the live services catalog only — no free-text slug entry. */}
       {tab === 'related' && (
         <div className="space-y-4">
-          <SectionHeader title="Related Services" count={related.length}>
-            <DirectAddBtn
-              table="csp_related_services"
-              parentKey="city_service_page_id"
-              parentId={cspId}
-              fields={[
-                { key: 'service_slug', label: 'Service Slug', type: 'text', required: true },
-                { key: 'service_name', label: 'Service Name', type: 'text', required: true },
-                { key: 'category',     label: 'Category',     type: 'text' },
-                { key: 'sort_order',   label: 'Sort Order',   type: 'number' },
-              ]}
-              onAdded={fetchAll}
-            />
-          </SectionHeader>
           <p className="text-xs text-[#6b7280] px-1">
             These appear as related service cards on /{citySlug}/services/{categorySlug}
           </p>
-          {related.length === 0 && <Empty>No related services yet.</Empty>}
-          {related.map(row => (
-            <DirectChildRow key={s(row.id)} row={row} table="csp_related_services"
-              preview={`${s(row.service_name)} → /${citySlug}/services/${s(row.service_slug)}`}
-              fields={[
-                { key: 'service_slug', label: 'Service Slug', type: 'text'   },
-                { key: 'service_name', label: 'Service Name', type: 'text'   },
-                { key: 'category',     label: 'Category',     type: 'text'   },
-                { key: 'sort_order',   label: 'Sort Order',   type: 'number' },
-              ]}
-              onSave={fetchAll}
-            />
-          ))}
+          <CspRelatedServicePicker
+            cityServicePageId={cspId}
+            existing={related}
+            onRefresh={fetchAll}
+          />
         </div>
       )}
 

@@ -369,6 +369,141 @@ export function GlobalReviewPicker({
   )
 }
 
+// Homepage: unlike the other scopes, selection isn't written straight to the
+// DB — it's held in the homepage editor's local page_data state and only
+// persists when the admin clicks "Save Homepage", same as every other
+// homepage field. onChange just updates that in-memory selection.
+export function HomepageTestimonialPicker({
+  selectedIds,
+  onChange,
+}: {
+  selectedIds: string[]
+  onChange: (ids: string[]) => void
+}) {
+  const sb = getBrowserClient()
+  const [library, setLibrary] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+
+  const loadLibrary = async () => {
+    setLoading(true)
+    const { data, error } = await sb
+      .from('review_sources')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setLoading(false)
+
+    if (error) {
+      showToast('error', error.message)
+      setLibrary([])
+      return
+    }
+    setLibrary((data ?? []) as Row[])
+  }
+
+  useEffect(() => {
+    loadLibrary()
+  }, [])
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+
+  const selectedReviews = useMemo(
+    () => selectedIds
+      .map((id) => library.find((row) => s(row.id) === id))
+      .filter((row): row is Row => Boolean(row)),
+    [selectedIds, library],
+  )
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase()
+    if (!term) return library
+    return library.filter((row) =>
+      [reviewName(row), reviewBody(row), reviewSource(row)].join(' ').toLowerCase().includes(term)
+    )
+  }, [library, query])
+
+  const toggle = (id: string) => {
+    onChange(selectedSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id])
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+          <Star className="w-4 h-4 text-yellow-400" /> Selected for Homepage ({selectedIds.length})
+        </h3>
+        {selectedReviews.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic">
+            None selected — the homepage will fall back to an automatic, uncurated selection.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {selectedReviews.map((row) => {
+              const id = s(row.id)
+              return (
+                <div key={id} className="flex items-start justify-between gap-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">{reviewName(row)}</p>
+                    <p className="text-xs text-[#94a3b8] line-clamp-2 mt-1">{reviewBody(row)}</p>
+                  </div>
+                  <button onClick={() => toggle(id)} className="admin-btn-danger flex-shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-dashed border-[#3a3d4e] p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-white">Choose from Global Review Library</p>
+          <button onClick={loadLibrary} disabled={loading} className="admin-btn-secondary">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Refresh
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search reviews, customer, location…"
+            className="admin-input pl-9"
+          />
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-blue-400" /></div>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic py-3">No matching reviews found.</p>
+        ) : (
+          <div className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
+            {filtered.map((row) => {
+              const id = s(row.id)
+              const isSelected = selectedSet.has(id)
+              return (
+                <div key={id} className="flex items-center justify-between gap-4 rounded-xl border border-[#2a2d3e] bg-[#11131c] p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">{reviewName(row)}</p>
+                    <p className="text-xs text-[#94a3b8] line-clamp-2 mt-1">{reviewBody(row)}</p>
+                  </div>
+                  <button
+                    onClick={() => toggle(id)}
+                    className={isSelected ? 'admin-btn-secondary flex-shrink-0' : 'admin-btn-primary flex-shrink-0'}
+                  >
+                    {isSelected ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 type FaqScope = 'recommended' | 'all' | 'global' | 'service' | 'area'
 
 export function FaqLibraryPicker({
@@ -631,6 +766,401 @@ export function FaqLibraryPicker({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// Global services catalog: related_slugs is a plain string[] on the service's
+// own row (no junction table), so "adding" one just toggles it in that array.
+export function ServiceRelatedPicker({
+  serviceId,
+  serviceSlug,
+  relatedSlugs,
+  onRefresh,
+}: {
+  serviceId: string
+  serviceSlug: string
+  relatedSlugs: string[]
+  onRefresh: () => void
+}) {
+  const sb = getBrowserClient()
+  const [services, setServices] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [savingSlug, setSavingSlug] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('all')
+
+  const loadServices = async () => {
+    setLoading(true)
+    const { data, error } = await sb
+      .from('services')
+      .select('id, slug, title, category')
+      .order('category')
+      .order('title')
+    setLoading(false)
+
+    if (error) {
+      showToast('error', error.message)
+      setServices([])
+      return
+    }
+    setServices((data ?? []) as Row[])
+  }
+
+  useEffect(() => {
+    loadServices()
+  }, [])
+
+  const relatedSet = useMemo(() => new Set(relatedSlugs), [relatedSlugs])
+
+  const categories = useMemo(() => {
+    const values = new Set<string>()
+    services.forEach((service) => {
+      const value = s(service.category).trim()
+      if (value) values.add(value)
+    })
+    return Array.from(values).sort((a, z) => a.localeCompare(z))
+  }, [services])
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase()
+    return services.filter((service) => {
+      const slug = s(service.slug)
+      if (!slug || slug === serviceSlug) return false
+      const serviceCategory = s(service.category)
+      if (category !== 'all' && serviceCategory !== category) return false
+      if (!term) return true
+      return [s(service.title), slug, serviceCategory].join(' ').toLowerCase().includes(term)
+    })
+  }, [services, query, category, serviceSlug])
+
+  const toggleRelated = async (targetSlug: string) => {
+    const wasSelected = relatedSet.has(targetSlug)
+    const next = wasSelected
+      ? relatedSlugs.filter((slug) => slug !== targetSlug)
+      : [...relatedSlugs, targetSlug]
+
+    setSavingSlug(targetSlug)
+    const { error } = await sb.from('services').update({ related_slugs: next }).eq('id', serviceId)
+    setSavingSlug(null)
+
+    if (error) {
+      showToast('error', error.message)
+      return
+    }
+    showToast('success', wasSelected ? 'Removed from related services.' : 'Added to related services.')
+    onRefresh()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="admin-card p-5 space-y-4">
+        <div>
+          <h2 className="admin-section-title flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-orange-400" /> Selected Related Services
+          </h2>
+          <p className="text-xs text-[#6b7280] mt-1">Shown as "You may also need" on this service's page.</p>
+        </div>
+
+        {relatedSlugs.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic">No related services selected.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {relatedSlugs.map((slug) => {
+              const match = services.find((service) => s(service.slug) === slug)
+              return (
+                <span
+                  key={slug}
+                  className="inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/5 px-3 py-1.5 text-sm text-white"
+                >
+                  {s(match?.title, slug)}
+                  <button
+                    onClick={() => toggleRelated(slug)}
+                    disabled={savingSlug === slug}
+                    className="text-[#6b7280] hover:text-red-400"
+                    aria-label={`Remove ${s(match?.title, slug)}`}
+                  >
+                    {savingSlug === slug ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  </button>
+                </span>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="admin-card p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-white">Choose Existing Services</h3>
+            <p className="text-xs text-[#6b7280] mt-1">Picked from your live service catalog — no free-text entry.</p>
+          </div>
+          <button onClick={loadServices} disabled={loading} className="admin-btn-secondary">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Refresh
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 md:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search service name or slug…"
+              className="admin-input pl-9"
+            />
+          </div>
+          <select value={category} onChange={(event) => setCategory(event.target.value)} className="admin-input md:w-52">
+            <option value="all">All categories</option>
+            {categories.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic py-3">No matching services found.</p>
+        ) : (
+          <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
+            {filtered.map((service) => {
+              const slug = s(service.slug)
+              const isSelected = relatedSet.has(slug)
+              return (
+                <div key={slug} className="flex items-center justify-between gap-4 rounded-xl border border-[#2a2d3e] bg-[#11131c] p-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-white truncate">{s(service.title, slug)}</p>
+                    <p className="text-xs text-[#6b7280] mt-1">{slug} · {s(service.category, 'uncategorized')}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleRelated(slug)}
+                    disabled={savingSlug === slug}
+                    className={isSelected ? 'admin-btn-secondary flex-shrink-0' : 'admin-btn-primary flex-shrink-0'}
+                  >
+                    {savingSlug === slug ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : isSelected ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5" />
+                    )}
+                    {isSelected ? 'Added' : 'Add'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// City-service-category (CSP) pages: csp_related_services is a junction
+// table with denormalized slug/name/category, so unlike the plain services
+// table this needs insert/delete rows rather than toggling a JSONB array.
+export function CspRelatedServicePicker({
+  cityServicePageId,
+  existing,
+  onRefresh,
+}: {
+  cityServicePageId: string
+  existing: Row[]
+  onRefresh: () => void
+}) {
+  const sb = getBrowserClient()
+  const [services, setServices] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [savingSlug, setSavingSlug] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('all')
+
+  const loadServices = async () => {
+    setLoading(true)
+    const { data, error } = await sb
+      .from('services')
+      .select('id, slug, title, category')
+      .order('category')
+      .order('title')
+    setLoading(false)
+
+    if (error) {
+      showToast('error', error.message)
+      setServices([])
+      return
+    }
+    setServices((data ?? []) as Row[])
+  }
+
+  useEffect(() => {
+    loadServices()
+  }, [])
+
+  const existingSlugs = useMemo(
+    () => new Set(existing.map((row) => s(row.service_slug)).filter(Boolean)),
+    [existing],
+  )
+
+  const categories = useMemo(() => {
+    const values = new Set<string>()
+    services.forEach((service) => {
+      const value = s(service.category).trim()
+      if (value) values.add(value)
+    })
+    return Array.from(values).sort((a, z) => a.localeCompare(z))
+  }, [services])
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase()
+    return services.filter((service) => {
+      const slug = s(service.slug)
+      if (!slug) return false
+      const serviceCategory = s(service.category)
+      if (category !== 'all' && serviceCategory !== category) return false
+      if (!term) return true
+      return [s(service.title), slug, serviceCategory].join(' ').toLowerCase().includes(term)
+    })
+  }, [services, query, category])
+
+  const addRelated = async (service: Row) => {
+    const slug = s(service.slug)
+    if (!slug) return
+    if (existingSlugs.has(slug)) {
+      showToast('error', 'This service is already related.')
+      return
+    }
+
+    setSavingSlug(slug)
+    const { error } = await sb.from('csp_related_services').insert({
+      city_service_page_id: cityServicePageId,
+      service_slug: slug,
+      service_name: s(service.title, slug),
+      category: s(service.category) || null,
+      sort_order: existing.length + 1,
+    })
+    setSavingSlug(null)
+
+    if (error) {
+      showToast('error', error.message)
+      return
+    }
+    showToast('success', 'Related service added.')
+    onRefresh()
+  }
+
+  const removeRelated = async (row: Row) => {
+    const rowId = s(row.id)
+    if (!rowId) return
+    if (!confirm(`Remove ${s(row.service_name, 'this service')} from related services?`)) return
+
+    setRemovingId(rowId)
+    const { error } = await sb.from('csp_related_services').delete().eq('id', rowId)
+    setRemovingId(null)
+
+    if (error) {
+      showToast('error', error.message)
+      return
+    }
+    showToast('success', 'Related service removed.')
+    onRefresh()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="admin-card p-5 space-y-4">
+        <h2 className="admin-section-title flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-orange-400" /> Selected Related Services
+        </h2>
+        {existing.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic">No related services selected.</p>
+        ) : (
+          <div className="space-y-2">
+            {existing.map((row) => {
+              const rowId = s(row.id)
+              return (
+                <div key={rowId} className="flex items-center justify-between gap-4 rounded-xl border border-orange-500/20 bg-orange-500/5 p-3">
+                  <p className="text-sm text-white">
+                    {s(row.service_name)} <span className="text-xs text-[#6b7280]">/{s(row.service_slug)}</span>
+                  </p>
+                  <button
+                    onClick={() => removeRelated(row)}
+                    disabled={removingId === rowId}
+                    className="admin-btn-danger flex-shrink-0"
+                  >
+                    {removingId === rowId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    Remove
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="admin-card p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-white">Choose Existing Services</h3>
+            <p className="text-xs text-[#6b7280] mt-1">Picked from your live service catalog — no free-text entry.</p>
+          </div>
+          <button onClick={loadServices} disabled={loading} className="admin-btn-secondary">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Refresh
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 md:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search service name or slug…"
+              className="admin-input pl-9"
+            />
+          </div>
+          <select value={category} onChange={(event) => setCategory(event.target.value)} className="admin-input md:w-52">
+            <option value="all">All categories</option>
+            {categories.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm text-[#6b7280] italic py-3">No matching services found.</p>
+        ) : (
+          <div className="max-h-[430px] space-y-2 overflow-y-auto pr-1">
+            {filtered.map((service) => {
+              const slug = s(service.slug)
+              const isSelected = existingSlugs.has(slug)
+              return (
+                <div key={slug} className="flex items-center justify-between gap-4 rounded-xl border border-[#2a2d3e] bg-[#11131c] p-4">
+                  <div className="min-w-0">
+                    <p className="font-medium text-white truncate">{s(service.title, slug)}</p>
+                    <p className="text-xs text-[#6b7280] mt-1">{slug} · {s(service.category, 'uncategorized')}</p>
+                  </div>
+                  <button
+                    onClick={() => addRelated(service)}
+                    disabled={isSelected || savingSlug === slug}
+                    className={isSelected ? 'admin-btn-secondary flex-shrink-0 opacity-60' : 'admin-btn-primary flex-shrink-0'}
+                  >
+                    {savingSlug === slug ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : isSelected ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5" />
+                    )}
+                    {isSelected ? 'Added' : 'Add'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

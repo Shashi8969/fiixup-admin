@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
 import { revalidateSeoPages } from '@/lib/actions'
+import { HomepageTestimonialPicker } from '@/components/location-services/editor/LocationServiceContentPickers'
 import type { ElementType, ReactNode } from 'react'
 import {
   Database,
@@ -12,10 +13,12 @@ import {
   Loader2,
   MapPin,
   Phone,
+  Plus,
   RefreshCw,
   Save,
   Settings,
   Star,
+  Trash2,
 } from 'lucide-react'
 
 type Pair = { heading: string; text: string }
@@ -64,6 +67,9 @@ type HomePageData = {
     heading: string
     subtext: string
     expansionText: string
+  }
+  testimonials: {
+    selectedReviewIds: string[]
   }
   blog: {
     heading: string
@@ -174,6 +180,9 @@ const DEFAULT_HOME_DATA: HomePageData = {
     subtext: 'Book nearby car and bike mechanics for emergency breakdown help, battery replacement, puncture repair, oil change and roadside assistance.',
     expansionText: 'Expanding soon to more Indian cities',
   },
+  testimonials: {
+    selectedReviewIds: [],
+  },
   blog: {
     heading: 'Latest from Our Blog',
     subtext: 'Expert tips, maintenance guides and service insights to help you keep your car and bike in better condition.',
@@ -260,6 +269,7 @@ function mergeHomeData(value: unknown): HomePageData {
   const services = objectValue(pd.services)
   const about = objectValue(pd.about)
   const cityCoverage = objectValue(pd.cityCoverage)
+  const testimonials = objectValue(pd.testimonials)
   const blog = objectValue(pd.blog)
   const contact = objectValue(pd.contact)
 
@@ -306,6 +316,9 @@ function mergeHomeData(value: unknown): HomePageData {
       heading: stringValue(cityCoverage.heading, DEFAULT_HOME_DATA.cityCoverage.heading),
       subtext: stringValue(cityCoverage.subtext, DEFAULT_HOME_DATA.cityCoverage.subtext),
       expansionText: stringValue(cityCoverage.expansionText, DEFAULT_HOME_DATA.cityCoverage.expansionText),
+    },
+    testimonials: {
+      selectedReviewIds: stringArray(testimonials.selectedReviewIds, []),
     },
     blog: {
       heading: stringValue(blog.heading, DEFAULT_HOME_DATA.blog.heading),
@@ -376,34 +389,82 @@ function ArrayEditor({ label, values, onChange, placeholder, help }: { label: st
 }
 
 function PairEditor({ label, rows, onChange, help }: { label: string; rows: Pair[]; onChange: (rows: Pair[]) => void; help?: string }) {
-  const text = rows.map((row) => `${row.heading} | ${row.text}`).join('\n')
+  const update = (index: number, patch: Partial<Pair>) =>
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  const remove = (index: number) => onChange(rows.filter((_, i) => i !== index))
+  const add = () => onChange([...rows, { heading: '', text: '' }])
+
   return (
-    <TextArea
-      label={label}
-      value={text}
-      onChange={(next) => onChange(next.split('\n').map((line) => {
-        const [heading = '', ...rest] = line.split('|')
-        return { heading: heading.trim(), text: rest.join('|').trim() }
-      }).filter((row) => row.heading || row.text))}
-      rows={6}
-      help={help || 'Format: Heading | Description. One row per line.'}
-    />
+    <div className="md:col-span-2 space-y-2">
+      <span className="admin-label">{label}</span>
+      {help && <p className="text-xs text-[#6b7280] leading-relaxed">{help}</p>}
+      <div className="space-y-2">
+        {rows.map((row, index) => (
+          <div key={index} className="flex gap-2 items-start rounded-xl border border-[#2a2d3e] bg-[#11131c] p-3">
+            <div className="flex-1 grid gap-2">
+              <input
+                value={row.heading}
+                onChange={(event) => update(index, { heading: event.target.value })}
+                placeholder="Heading"
+                className="admin-input"
+              />
+              <input
+                value={row.text}
+                onChange={(event) => update(index, { text: event.target.value })}
+                placeholder="Description"
+                className="admin-input"
+              />
+            </div>
+            <button type="button" onClick={() => remove(index)} className="admin-btn-danger flex-shrink-0 mt-1">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-sm text-[#6b7280] italic">No rows yet.</p>}
+      </div>
+      <button type="button" onClick={add} className="admin-btn-secondary">
+        <Plus className="w-3.5 h-3.5" /> Add Row
+      </button>
+    </div>
   )
 }
 
-function StatEditor({ label, rows, onChange }: { label: string; rows: Stat[]; onChange: (rows: Stat[]) => void }) {
-  const text = rows.map((row) => `${row.value} | ${row.label}`).join('\n')
+function StatEditor({ label, rows, onChange, help }: { label: string; rows: Stat[]; onChange: (rows: Stat[]) => void; help?: string }) {
+  const update = (index: number, patch: Partial<Stat>) =>
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  const remove = (index: number) => onChange(rows.filter((_, i) => i !== index))
+  const add = () => onChange([...rows, { value: '', label: '' }])
+
   return (
-    <TextArea
-      label={label}
-      value={text}
-      onChange={(next) => onChange(next.split('\n').map((line) => {
-        const [value = '', ...rest] = line.split('|')
-        return { value: value.trim(), label: rest.join('|').trim() }
-      }).filter((row) => row.value || row.label))}
-      rows={5}
-      help="Format: Value | Label. Example: 30-Day | Warranty Support"
-    />
+    <div className="md:col-span-2 space-y-2">
+      <span className="admin-label">{label}</span>
+      {help && <p className="text-xs text-[#6b7280] leading-relaxed">{help}</p>}
+      <div className="space-y-2">
+        {rows.map((row, index) => (
+          <div key={index} className="flex gap-2 items-center rounded-xl border border-[#2a2d3e] bg-[#11131c] p-3">
+            <input
+              value={row.value}
+              onChange={(event) => update(index, { value: event.target.value })}
+              placeholder="Value, e.g. 30-Day"
+              className="admin-input w-40 flex-shrink-0"
+            />
+            <input
+              value={row.label}
+              onChange={(event) => update(index, { label: event.target.value })}
+              placeholder="Label, e.g. Warranty Support"
+              className="admin-input flex-1"
+            />
+            <button type="button" onClick={() => remove(index)} className="admin-btn-danger flex-shrink-0">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-sm text-[#6b7280] italic">No stats yet.</p>}
+      </div>
+      <button type="button" onClick={add} className="admin-btn-secondary">
+        <Plus className="w-3.5 h-3.5" /> Add Stat
+      </button>
+    </div>
   )
 }
 
@@ -494,6 +555,7 @@ export default function HomepageEditorPage() {
   const updateServices = (next: Partial<HomePageData['services']>) => setHomeData((current) => ({ ...current, services: { ...current.services, ...next } }))
   const updateAbout = (next: Partial<HomePageData['about']>) => setHomeData((current) => ({ ...current, about: { ...current.about, ...next } }))
   const updateCoverage = (next: Partial<HomePageData['cityCoverage']>) => setHomeData((current) => ({ ...current, cityCoverage: { ...current.cityCoverage, ...next } }))
+  const updateTestimonialIds = (ids: string[]) => setHomeData((current) => ({ ...current, testimonials: { selectedReviewIds: ids } }))
   const updateBlog = (next: Partial<HomePageData['blog']>) => setHomeData((current) => ({ ...current, blog: { ...current.blog, ...next } }))
   const updateContact = (next: Partial<HomePageData['contact']>) => setHomeData((current) => ({ ...current, contact: { ...current.contact, ...next } }))
 
@@ -641,14 +703,18 @@ export default function HomepageEditorPage() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Testimonials + Blog" description="Controls testimonial heading is currently hard-coded in frontend; blog section text is controlled here. Reviews come from review_sources; posts come from posts." icon={Star}>
+      <SectionCard title="Testimonials" description="Pick exactly which review_sources entries appear on the homepage, instead of an automatic, uncurated selection." icon={Star}>
+        <HomepageTestimonialPicker
+          selectedIds={homeData.testimonials.selectedReviewIds}
+          onChange={updateTestimonialIds}
+        />
+      </SectionCard>
+
+      <SectionCard title="Blog Section" description="Controls blog section heading/subtext/CTA text. Posts themselves come from the posts table." icon={FileText}>
         <div className="grid md:grid-cols-2 gap-3">
           <Field label="Blog Heading" value={homeData.blog.heading} onChange={(value) => updateBlog({ heading: value })} />
           <Field label="Blog CTA Label" value={homeData.blog.ctaLabel} onChange={(value) => updateBlog({ ctaLabel: value })} />
           <div className="md:col-span-2"><TextArea label="Blog Subtext" value={homeData.blog.subtext} onChange={(value) => updateBlog({ subtext: value })} rows={3} /></div>
-        </div>
-        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-sm text-yellow-100">
-          For full testimonial title/subtitle control, frontend Testimonials component needs to accept homepage data. Current testimonials are correctly fetched from review_sources.
         </div>
       </SectionCard>
 
