@@ -76,6 +76,7 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
     latitude:   String(area.latitude ?? ''),
     longitude:  String(area.longitude ?? ''),
     is_active:  Boolean(area.is_active ?? true),
+    vehicles_serviced: String(area.vehicles_serviced ?? '0'),
   })
   const [saving, setSaving] = useState(false)
 
@@ -89,6 +90,7 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
       latitude:  form.latitude  ? parseFloat(form.latitude)  : null,
       longitude: form.longitude ? parseFloat(form.longitude) : null,
       is_active: form.is_active,
+      vehicles_serviced: parseInt(form.vehicles_serviced) || 0,
       updated_at: new Date().toISOString(),
     }).eq('id', area.id)
     setSaving(false)
@@ -126,6 +128,8 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
             <Inp label="Slug"  value={form.slug}  onChange={v => setForm(p=>({...p,slug:v}))} />
           </div>
           <Inp label="Highlight text" value={form.highlight} onChange={v => setForm(p=>({...p,highlight:v}))} />
+          <Inp label="Vehicles Serviced (real count for this area — sums up into the city and homepage totals)"
+            value={form.vehicles_serviced} onChange={v => setForm(p=>({...p,vehicles_serviced:v}))} />
           <div className="grid grid-cols-3 gap-3">
             <Inp label="Sort Order" value={form.sort_order} onChange={v => setForm(p=>({...p,sort_order:v}))} />
             <Inp label="Latitude"   value={form.latitude}   onChange={v => setForm(p=>({...p,latitude:v}))} />
@@ -160,7 +164,7 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
 export function AddAreaButton({ cityId, citySlug, onAdded }: { cityId: string; citySlug: string; onAdded: () => void }) {
   const sb = getBrowserClient()
   const [open, setOpen]   = useState(false)
-  const [form, setForm]   = useState({ name: '', slug: '', highlight: '', sort_order: '0' })
+  const [form, setForm]   = useState({ name: '', slug: '', highlight: '', sort_order: '0', vehicles_serviced: '0' })
   const [busy, setBusy]   = useState(false)
 
   const add = async () => {
@@ -173,12 +177,13 @@ export function AddAreaButton({ cityId, citySlug, onAdded }: { cityId: string; c
       slug:       form.slug,
       highlight:  form.highlight,
       sort_order: parseInt(form.sort_order) || 0,
+      vehicles_serviced: parseInt(form.vehicles_serviced) || 0,
       is_active:  true,
     })
     setBusy(false)
     if (error) { showToast('error', error.message); return }
     showToast('success', 'Area added')
-    setForm({ name: '', slug: '', highlight: '', sort_order: '0' })
+    setForm({ name: '', slug: '', highlight: '', sort_order: '0', vehicles_serviced: '0' })
     setOpen(false)
     onAdded()
   }
@@ -195,6 +200,7 @@ export function AddAreaButton({ cityId, citySlug, onAdded }: { cityId: string; c
             <Inp label="Slug *"  value={form.slug}  onChange={v => setForm(p=>({...p,slug:v}))} placeholder="koramangala" />
           </div>
           <Inp label="Highlight" value={form.highlight} onChange={v => setForm(p=>({...p,highlight:v}))} placeholder="IT Hub" />
+          <Inp label="Vehicles Serviced" value={form.vehicles_serviced} onChange={v => setForm(p=>({...p,vehicles_serviced:v}))} placeholder="0" />
           <Inp label="Sort Order" value={form.sort_order} onChange={v => setForm(p=>({...p,sort_order:v}))} />
           <button onClick={add} disabled={busy} className="admin-btn-primary">
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}

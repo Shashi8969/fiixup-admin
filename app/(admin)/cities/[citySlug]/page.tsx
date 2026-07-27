@@ -256,6 +256,7 @@ export default function CityEditorPage() {
           <SectionTitle>Hero Section</SectionTitle>
           <Field label="Hero Tagline"    value={s(city.hero_tagline)}   onSave={saveField('hero_tagline')} />
           <Field label="Hero Heading"    value={s(city.hero_heading)}   onSave={saveField('hero_heading')} multiline rows={2} />
+          <Field label="Hero Subheading" value={s(city.hero_subheading)} onSave={saveField('hero_subheading')} multiline rows={3} />
           <Field label="Hero Image URL"  value={s(city.hero_image_url)} onSave={saveField('hero_image_url')} />
           <Field label="Hero Image Alt"  value={s(city.hero_image_alt)} onSave={saveField('hero_image_alt')} />
           <JsonField label="Hero Bullets (JSON array of strings)" value={city.hero_bullets} onSave={saveJson('hero_bullets')} />
