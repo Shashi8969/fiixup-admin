@@ -57,12 +57,28 @@ function reviewContentKey(row: Row): string {
   return `${normalize(reviewName(row))}|${normalize(reviewBody(row))}`
 }
 
-export function GlobalReviewPicker({
-  locationServiceId,
+export type ReviewTargetConfig = {
+  /** Table this scope's testimonials live in, e.g. city_testimonials, service_testimonials, ls_testimonials */
+  table: string
+  /** FK column on that table pointing back to the scope, e.g. city_id, service_id, location_service_id */
+  idColumn: string
+  id: string
+  /** Some testimonial tables call the area/location column "area", others "location" */
+  locationField: 'area' | 'location'
+  /** Used in copy — "city", "service", "location service" */
+  scopeLabel: string
+}
+
+// Shared by every "pick a real review instead of typing a new one" surface —
+// city, service, and location-service testimonials all read from the same
+// review_sources library and just insert into a different target table, so
+// this is the one place that logic lives rather than three near-duplicates.
+export function ReviewLibraryPicker({
+  target,
   existing,
   onRefresh,
 }: {
-  locationServiceId: string
+  target: ReviewTargetConfig
   existing: Row[]
   onRefresh: () => void
 }) {
@@ -143,15 +159,15 @@ export function GlobalReviewPicker({
       return
     }
     if (isSelected(review)) {
-      showToast('error', 'This review is already selected for this service.')
+      showToast('error', `This review is already selected for this ${target.scopeLabel}.`)
       return
     }
 
     setSavingId(reviewId)
-    const payload = {
-      location_service_id: locationServiceId,
+    const payload: Row = {
+      [target.idColumn]: target.id,
       name: reviewName(review),
-      area: s(review.location || review.area || review.city) || null,
+      [target.locationField]: s(review.location || review.area || review.city) || null,
       vehicle: s(review.vehicle || review.vehicle_type) || null,
       rating: Math.max(1, Math.min(5, n(review.rating, 5))),
       body,
@@ -162,7 +178,7 @@ export function GlobalReviewPicker({
       sort_order: existing.length + 1,
     }
 
-    const { error } = await sb.from('ls_testimonials').insert(payload)
+    const { error } = await sb.from(target.table).insert(payload)
     setSavingId(null)
 
     if (error) {
@@ -170,28 +186,28 @@ export function GlobalReviewPicker({
       return
     }
 
-    showToast('success', 'Review added to this service.')
+    showToast('success', `Review added to this ${target.scopeLabel}.`)
     onRefresh()
   }
 
   const removeReview = async (review: Row) => {
     const rowId = s(review.id)
     if (!rowId) return
-    if (!confirm(`Remove ${s(review.name, 'this review')} from this location service?`)) return
+    if (!confirm(`Remove ${s(review.name, 'this review')} from this ${target.scopeLabel}?`)) return
 
     setRemovingId(rowId)
     const { error } = await sb
-      .from('ls_testimonials')
+      .from(target.table)
       .delete()
       .eq('id', rowId)
-      .eq('location_service_id', locationServiceId)
+      .eq(target.idColumn, target.id)
     setRemovingId(null)
 
     if (error) {
       showToast('error', error.message)
       return
     }
-    showToast('success', 'Review removed from this service.')
+    showToast('success', `Review removed from this ${target.scopeLabel}.`)
     onRefresh()
   }
 
@@ -230,7 +246,7 @@ export function GlobalReviewPicker({
                       </div>
                       <p className="text-sm leading-6 text-[#cbd5e1] mt-2">{s(current.body)}</p>
                       <p className="text-xs text-[#6b7280] mt-2">
-                        {[s(current.vehicle), s(current.area), s(current.source)].filter(Boolean).join(' · ')}
+                        {[s(current.vehicle), s(current[target.locationField]), s(current.source)].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                     <button
@@ -324,6 +340,32 @@ export function GlobalReviewPicker({
         )}
       </div>
     </div>
+  )
+}
+
+// Preserves the original call signature used on the location-service editor
+// page so that existing call site needs no changes.
+export function GlobalReviewPicker({
+  locationServiceId,
+  existing,
+  onRefresh,
+}: {
+  locationServiceId: string
+  existing: Row[]
+  onRefresh: () => void
+}) {
+  return (
+    <ReviewLibraryPicker
+      target={{
+        table: 'ls_testimonials',
+        idColumn: 'location_service_id',
+        id: locationServiceId,
+        locationField: 'area',
+        scopeLabel: 'service',
+      }}
+      existing={existing}
+      onRefresh={onRefresh}
+    />
   )
 }
 

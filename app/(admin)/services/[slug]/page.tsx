@@ -12,6 +12,7 @@ import { AdminBackButton }     from '@/components/navigation/AdminBackButton'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { ChildTableEditor }    from '@/components/editors/ChildTableEditor'
 import { LivePagePreview }     from '@/components/preview/LivePagePreview'
+import { ReviewLibraryPicker } from '@/components/location-services/editor/LocationServiceContentPickers'
 import { publicSiteUrl }       from '@/lib/public-site'
 import { showToast }           from '@/components/ui/Toast'
 import { saveService }         from '@/lib/actions'
@@ -115,26 +116,6 @@ export default function ServiceEditorPage() {
     },
   }
 
-  const testActions = {
-    onSave: async (id: string, data: Record<string, unknown>) => {
-      const { error } = await sb.from('service_testimonials').update(data).eq('id', id)
-      if (error) return { success: false as const, error: error.message }
-      fetchAll()
-      return { success: true as const, message: 'Testimonial saved.' }
-    },
-    onAdd: async (data: Record<string, unknown>) => {
-      const { error } = await sb.from('service_testimonials').insert({ ...data, service_id: svc.id })
-      if (error) return { success: false as const, error: error.message }
-      fetchAll()
-      return { success: true as const, message: 'Testimonial added.' }
-    },
-    onDelete: async (id: string) => {
-      const { error } = await sb.from('service_testimonials').delete().eq('id', id)
-      if (error) return { success: false as const, error: error.message }
-      fetchAll()
-      return { success: true as const, message: 'Testimonial deleted.' }
-    },
-  }
 
   const liveUrl = publicSiteUrl(`/services/${serviceSlug}`)
 
@@ -286,26 +267,20 @@ export default function ServiceEditorPage() {
       )}
 
       {/* ── Testimonials ── */}
+      {/* Picked from the shared review_sources library only — no free-text
+          entry, so every testimonial traces back to one managed pool. */}
       {tab === 'Testimonials' && (
-        <div className="admin-card p-6">
-          <ChildTableEditor
-            title="Testimonials"
-            items={svcTests}
-            idKey="id"
-            fields={[
-              { key: 'name',       label: 'Customer Name', type: 'text',     required: true },
-              { key: 'vehicle',    label: 'Vehicle',        type: 'text'     },
-              { key: 'location',   label: 'Location',       type: 'text'     },
-              { key: 'rating',     label: 'Rating (1–5)',   type: 'number',   required: true },
-              { key: 'body',       label: 'Review Text',    type: 'textarea', rows: 4, required: true },
-              { key: 'date_label', label: 'Date Label',     type: 'text',     placeholder: 'e.g. April 2025' },
-              { key: 'sort_order', label: 'Sort Order',     type: 'number'   },
-            ]}
-            {...testActions}
-            addLabel="Add Testimonial"
-            emptyText="No testimonials yet."
-          />
-        </div>
+        <ReviewLibraryPicker
+          target={{
+            table: 'service_testimonials',
+            idColumn: 'service_id',
+            id: String(svc.id),
+            locationField: 'location',
+            scopeLabel: 'service',
+          }}
+          existing={svcTests}
+          onRefresh={fetchAll}
+        />
       )}
 
       {tab === 'Preview' && (

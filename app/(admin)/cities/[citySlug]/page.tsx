@@ -12,6 +12,7 @@ import { SeoMetaPanel }  from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
 import { LivePagePreview } from '@/components/preview/LivePagePreview'
+import { ReviewLibraryPicker } from '@/components/location-services/editor/LocationServiceContentPickers'
 import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }     from '@/components/ui/Toast'
@@ -342,39 +343,21 @@ export default function CityEditorPage() {
       )}
 
       {/* ════════════════════ TESTIMONIALS ════════════════════ */}
+      {/* Picked from the shared review_sources library only — no free-text
+          entry, so every testimonial on the site traces back to one
+          managed, verifiable pool instead of independently-typed copy. */}
       {tab === 'testimonials' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <SectionTitle>Customer Testimonials <Badge>{testimonials.length}</Badge></SectionTitle>
-            <AddRowButton table="city_testimonials" parentKey="city_id" parentId={String(city.id)}
-              fields={[
-                { key: 'name',       label: 'Customer Name', type: 'text'    },
-                { key: 'area',       label: 'Area',          type: 'text'    },
-                { key: 'vehicle',    label: 'Vehicle',       type: 'text'    },
-                { key: 'rating',     label: 'Rating (1-5)',  type: 'number'  },
-                { key: 'body',       label: 'Review Text',   type: 'textarea'},
-                { key: 'date_label', label: 'Date Label',    type: 'text'    },
-                { key: 'sort_order', label: 'Sort Order',    type: 'number'  },
-              ]}
-              onAdded={fetchAll}
-            />
-          </div>
-          {testimonials.length === 0 && <Empty>No testimonials yet.</Empty>}
-          {testimonials.map(t => (
-            <EditableRow key={String(t.id)} row={t} table="city_testimonials"
-              fields={[
-                { key: 'name',       label: 'Name',         type: 'text'    },
-                { key: 'area',       label: 'Area',         type: 'text'    },
-                { key: 'vehicle',    label: 'Vehicle',      type: 'text'    },
-                { key: 'rating',     label: 'Rating',       type: 'number'  },
-                { key: 'body',       label: 'Review',       type: 'textarea'},
-                { key: 'date_label', label: 'Date Label',   type: 'text'    },
-                { key: 'sort_order', label: 'Sort Order',   type: 'number'  },
-              ]}
-              onSave={fetchAll}
-            />
-          ))}
-        </div>
+        <ReviewLibraryPicker
+          target={{
+            table: 'city_testimonials',
+            idColumn: 'city_id',
+            id: String(city.id),
+            locationField: 'area',
+            scopeLabel: 'city',
+          }}
+          existing={testimonials}
+          onRefresh={fetchAll}
+        />
       )}
 
       {/* ════════════════════ FAQs ════════════════════ */}
