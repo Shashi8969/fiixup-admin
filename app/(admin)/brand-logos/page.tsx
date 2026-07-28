@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
 import { revalidateBrandLogos } from '@/lib/actions'
-import { ImageCropUploadModal, type UploadedMediaItem } from '@/components/media/ImageCropUploadModal'
 import { MediaLibraryPicker, type MediaLibraryItem } from '@/components/media/MediaLibraryPicker'
 import {
   Award,
@@ -19,7 +19,6 @@ import {
   Save,
   Search,
   Trash2,
-  Upload,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -79,7 +78,6 @@ export default function BrandLogosPage() {
   const [newBrand, setNewBrand] = useState<BrandForm>({ ...EMPTY_FORM })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<BrandForm>({ ...EMPTY_FORM })
-  const [uploadTarget, setUploadTarget] = useState<'new' | 'edit' | null>(null)
   const [pickerTarget, setPickerTarget] = useState<'new' | 'edit' | null>(null)
 
   const fetchBrands = useCallback(async () => {
@@ -196,15 +194,6 @@ export default function BrandLogosPage() {
     fetchBrands()
   }
 
-  const handleUploadSuccess = (item: UploadedMediaItem) => {
-    if (uploadTarget === 'new') {
-      setNewBrand((current) => ({ ...current, logo_url: item.public_url }))
-    } else if (uploadTarget === 'edit') {
-      setEditForm((current) => ({ ...current, logo_url: item.public_url }))
-    }
-    setUploadTarget(null)
-  }
-
   const handlePickFromLibrary = (item: MediaLibraryItem) => {
     if (pickerTarget === 'new') {
       setNewBrand((current) => ({ ...current, logo_url: item.public_url }))
@@ -263,13 +252,12 @@ export default function BrandLogosPage() {
           <div>
             <p className="text-sm font-semibold text-white">Add new brand</p>
             <p className="text-xs text-[#6b7280] mt-0.5">
-              Upload the brand&apos;s official logo (ideally transparent PNG). It appears in the homepage marquee once active.
+              Choose the brand&apos;s official logo (ideally transparent PNG) from Media Library. It appears in the homepage marquee once active.
             </p>
           </div>
           <BrandFormFields
             form={newBrand}
             setForm={setNewBrand}
-            onUploadClick={() => setUploadTarget('new')}
             onPickClick={() => setPickerTarget('new')}
           />
           <div className="flex gap-2">
@@ -365,7 +353,6 @@ export default function BrandLogosPage() {
                     <BrandFormFields
                       form={editForm}
                       setForm={setEditForm}
-                      onUploadClick={() => setUploadTarget('edit')}
                       onPickClick={() => setPickerTarget('edit')}
                     />
                     <div className="flex gap-2">
@@ -383,15 +370,6 @@ export default function BrandLogosPage() {
         </div>
       )}
 
-      {uploadTarget && (
-        <ImageCropUploadModal
-          uploadFolder="brands"
-          allowOriginal
-          onSuccess={handleUploadSuccess}
-          onClose={() => setUploadTarget(null)}
-        />
-      )}
-
       {pickerTarget && (
         <MediaLibraryPicker
           folder="brands"
@@ -403,10 +381,9 @@ export default function BrandLogosPage() {
   )
 }
 
-function BrandFormFields({ form, setForm, onUploadClick, onPickClick }: {
+function BrandFormFields({ form, setForm, onPickClick }: {
   form: BrandForm
   setForm: React.Dispatch<React.SetStateAction<BrandForm>>
-  onUploadClick: () => void
   onPickClick: () => void
 }) {
   const update = (key: keyof BrandForm, value: string | boolean) => {
@@ -424,15 +401,15 @@ function BrandFormFields({ form, setForm, onUploadClick, onPickClick }: {
             <ImageIcon className="w-6 h-6 text-[#94a3b8]" />
           )}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={onUploadClick} className="admin-btn-secondary">
-            <Upload className="w-4 h-4" />
-            {form.logo_url ? 'Replace Logo' : 'Upload Logo'}
-          </button>
+        <div className="flex flex-col gap-2">
           <button type="button" onClick={onPickClick} className="admin-btn-secondary">
             <FolderOpen className="w-4 h-4" />
-            Choose from Library
+            Choose from Media Library
           </button>
+          <p className="text-xs text-[#6b7280]">
+            Logo not uploaded yet?{' '}
+            <Link href="/media" className="text-blue-400 hover:underline">Upload it in Media Library</Link>, then choose it here.
+          </p>
         </div>
       </div>
       <div>

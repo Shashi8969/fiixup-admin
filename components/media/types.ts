@@ -5,6 +5,8 @@ export const FOLDERS = [
   { id: 'blog',             label: 'Blog',              color: 'amber'  },
   { id: 'location-services',label: 'Location Services', color: 'teal'   },
   { id: 'og',               label: 'OG Images',         color: 'orange' },
+  { id: 'brands',           label: 'Brand Logos',       color: 'red'    },
+  { id: 'gallery',          label: 'Gallery',           color: 'teal'   },
   { id: 'team',             label: 'Team',              color: 'pink'   },
   { id: 'general',          label: 'General',           color: 'gray'   },
 ] as const

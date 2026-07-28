@@ -363,6 +363,7 @@ export default function MediaLibraryPage() {
       {showCropUpload && (
         <ImageCropUploadModal
           uploadFolder={uploadFolder}
+          allowOriginal
           onSuccess={(_item) => {
             fetchItems()
             // Keep modal open so user can upload another if wanted;

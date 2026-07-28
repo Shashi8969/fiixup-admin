@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
 import { revalidateTeamMembers } from '@/lib/actions'
-import { ImageCropUploadModal, type UploadedMediaItem } from '@/components/media/ImageCropUploadModal'
+import { MediaLibraryPicker, type MediaLibraryItem } from '@/components/media/MediaLibraryPicker'
 import {
+  FolderOpen,
   GripVertical,
   Loader2,
   Plus,
@@ -13,7 +15,6 @@ import {
   Save,
   Search,
   Trash2,
-  Upload,
   UserCircle2,
   Users,
 } from 'lucide-react'
@@ -78,7 +79,7 @@ export default function TeamPage() {
   const [newMember, setNewMember] = useState<TeamForm>({ ...EMPTY_FORM })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<TeamForm>({ ...EMPTY_FORM })
-  const [uploadTarget, setUploadTarget] = useState<'new' | 'edit' | null>(null)
+  const [pickerTarget, setPickerTarget] = useState<'new' | 'edit' | null>(null)
 
   const fetchMembers = useCallback(async () => {
     setLoading(true)
@@ -186,13 +187,13 @@ export default function TeamPage() {
     fetchMembers()
   }
 
-  const handleUploadSuccess = (item: UploadedMediaItem) => {
-    if (uploadTarget === 'new') {
+  const handlePickFromLibrary = (item: MediaLibraryItem) => {
+    if (pickerTarget === 'new') {
       setNewMember((current) => ({ ...current, photo_url: item.public_url }))
-    } else if (uploadTarget === 'edit') {
+    } else if (pickerTarget === 'edit') {
       setEditForm((current) => ({ ...current, photo_url: item.public_url }))
     }
-    setUploadTarget(null)
+    setPickerTarget(null)
   }
 
   return (
@@ -237,7 +238,7 @@ export default function TeamPage() {
             <p className="text-sm font-semibold text-white">Add new team member</p>
             <p className="text-xs text-[#6b7280] mt-0.5">A photo is optional — members without one show an initials avatar instead.</p>
           </div>
-          <TeamFormFields form={newMember} setForm={setNewMember} onUploadClick={() => setUploadTarget('new')} />
+          <TeamFormFields form={newMember} setForm={setNewMember} onPickClick={() => setPickerTarget('new')} />
           <div className="flex gap-2">
             <button onClick={createMember} disabled={saving} className="admin-btn-primary">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -311,7 +312,7 @@ export default function TeamPage() {
 
                 {editing && (
                   <div className="border-t border-[#2a2d3e] pt-4 space-y-4">
-                    <TeamFormFields form={editForm} setForm={setEditForm} onUploadClick={() => setUploadTarget('edit')} />
+                    <TeamFormFields form={editForm} setForm={setEditForm} onPickClick={() => setPickerTarget('edit')} />
                     <div className="flex gap-2">
                       <button onClick={() => saveMember(member)} disabled={saving} className="admin-btn-primary">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -327,21 +328,21 @@ export default function TeamPage() {
         </div>
       )}
 
-      {uploadTarget && (
-        <ImageCropUploadModal
-          uploadFolder="team"
-          onSuccess={handleUploadSuccess}
-          onClose={() => setUploadTarget(null)}
+      {pickerTarget && (
+        <MediaLibraryPicker
+          folder="team"
+          onSelect={handlePickFromLibrary}
+          onClose={() => setPickerTarget(null)}
         />
       )}
     </div>
   )
 }
 
-function TeamFormFields({ form, setForm, onUploadClick }: {
+function TeamFormFields({ form, setForm, onPickClick }: {
   form: TeamForm
   setForm: React.Dispatch<React.SetStateAction<TeamForm>>
-  onUploadClick: () => void
+  onPickClick: () => void
 }) {
   const update = (key: keyof TeamForm, value: string | boolean) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -358,10 +359,16 @@ function TeamFormFields({ form, setForm, onUploadClick }: {
             <UserCircle2 className="h-9 w-9 text-[#475569]" />
           )}
         </div>
-        <button type="button" onClick={onUploadClick} className="admin-btn-secondary">
-          <Upload className="w-4 h-4" />
-          {form.photo_url ? 'Replace Photo' : 'Upload Photo'}
-        </button>
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={onPickClick} className="admin-btn-secondary">
+            <FolderOpen className="w-4 h-4" />
+            Choose from Media Library
+          </button>
+          <p className="text-xs text-[#6b7280]">
+            Photo not uploaded yet?{' '}
+            <Link href="/media" className="text-blue-400 hover:underline">Upload it in Media Library</Link>, then choose it here.
+          </p>
+        </div>
       </div>
       <div>
         <label className="admin-label">Full Name *</label>

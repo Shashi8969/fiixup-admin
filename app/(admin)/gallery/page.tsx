@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
 import { revalidateGallery } from '@/lib/actions'
-import { ImageCropUploadModal, type UploadedMediaItem } from '@/components/media/ImageCropUploadModal'
+import { MediaLibraryPicker, type MediaLibraryItem } from '@/components/media/MediaLibraryPicker'
 import {
+  FolderOpen,
   GripVertical,
   ImageIcon,
   Images,
@@ -15,7 +17,6 @@ import {
   Save,
   Search,
   Trash2,
-  Upload,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -85,7 +86,7 @@ export default function GalleryPage() {
   const [newItem, setNewItem] = useState<GalleryForm>({ ...EMPTY_FORM })
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<GalleryForm>({ ...EMPTY_FORM })
-  const [uploadTarget, setUploadTarget] = useState<'new' | 'edit' | null>(null)
+  const [pickerTarget, setPickerTarget] = useState<'new' | 'edit' | null>(null)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -135,7 +136,7 @@ export default function GalleryPage() {
     const payload = toPayload(newItem)
 
     if (!payload.image_url) {
-      showToast('error', 'Please upload an image first.')
+      showToast('error', 'Please choose an image first.')
       return
     }
 
@@ -169,7 +170,7 @@ export default function GalleryPage() {
     const payload = toPayload(editForm)
 
     if (!payload.image_url) {
-      showToast('error', 'Please upload an image first.')
+      showToast('error', 'Please choose an image first.')
       return
     }
 
@@ -203,13 +204,13 @@ export default function GalleryPage() {
     fetchItems()
   }
 
-  const handleUploadSuccess = (item: UploadedMediaItem) => {
-    if (uploadTarget === 'new') {
+  const handlePickFromLibrary = (item: MediaLibraryItem) => {
+    if (pickerTarget === 'new') {
       setNewItem((current) => ({ ...current, image_url: item.public_url }))
-    } else if (uploadTarget === 'edit') {
+    } else if (pickerTarget === 'edit') {
       setEditForm((current) => ({ ...current, image_url: item.public_url }))
     }
-    setUploadTarget(null)
+    setPickerTarget(null)
   }
 
   return (
@@ -221,7 +222,7 @@ export default function GalleryPage() {
             Work Gallery
           </h1>
           <p className="text-sm text-[#6b7280] mt-1 max-w-2xl">
-            Manage the real completed job photos shown on the public &quot;Our Work&quot; gallery page. Only upload genuine Fiixup job photos.
+            Manage the real completed job photos shown on the public &quot;Our Work&quot; gallery page. Only choose genuine Fiixup job photos.
           </p>
         </div>
 
@@ -256,9 +257,9 @@ export default function GalleryPage() {
         <div className="admin-card p-5 space-y-4 border-dashed">
           <div>
             <p className="text-sm font-semibold text-white">Add new photo</p>
-            <p className="text-xs text-[#6b7280] mt-0.5">Use the &quot;Gallery Photo&quot; crop preset for a consistent grid.</p>
+            <p className="text-xs text-[#6b7280] mt-0.5">Choose a photo already uploaded to Media Library&apos;s &quot;Gallery&quot; folder.</p>
           </div>
-          <GalleryFormFields form={newItem} setForm={setNewItem} onUploadClick={() => setUploadTarget('new')} />
+          <GalleryFormFields form={newItem} setForm={setNewItem} onPickClick={() => setPickerTarget('new')} />
           <div className="flex gap-2">
             <button onClick={createItem} disabled={saving} className="admin-btn-primary">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -344,7 +345,7 @@ export default function GalleryPage() {
 
                   {editing && (
                     <div className="border-t border-[#2a2d3e] pt-4 space-y-4">
-                      <GalleryFormFields form={editForm} setForm={setEditForm} onUploadClick={() => setUploadTarget('edit')} />
+                      <GalleryFormFields form={editForm} setForm={setEditForm} onPickClick={() => setPickerTarget('edit')} />
                       <div className="flex gap-2">
                         <button onClick={() => saveItem(item)} disabled={saving} className="admin-btn-primary">
                           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -361,21 +362,21 @@ export default function GalleryPage() {
         </div>
       )}
 
-      {uploadTarget && (
-        <ImageCropUploadModal
-          uploadFolder="gallery"
-          onSuccess={handleUploadSuccess}
-          onClose={() => setUploadTarget(null)}
+      {pickerTarget && (
+        <MediaLibraryPicker
+          folder="gallery"
+          onSelect={handlePickFromLibrary}
+          onClose={() => setPickerTarget(null)}
         />
       )}
     </div>
   )
 }
 
-function GalleryFormFields({ form, setForm, onUploadClick }: {
+function GalleryFormFields({ form, setForm, onPickClick }: {
   form: GalleryForm
   setForm: React.Dispatch<React.SetStateAction<GalleryForm>>
-  onUploadClick: () => void
+  onPickClick: () => void
 }) {
   const update = (key: keyof GalleryForm, value: string | boolean) => {
     setForm((current) => ({ ...current, [key]: value }))
@@ -392,10 +393,16 @@ function GalleryFormFields({ form, setForm, onUploadClick }: {
             <ImageIcon className="w-6 h-6 text-[#94a3b8]" />
           )}
         </div>
-        <button type="button" onClick={onUploadClick} className="admin-btn-secondary">
-          <Upload className="w-4 h-4" />
-          {form.image_url ? 'Replace Photo' : 'Upload Photo'}
-        </button>
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={onPickClick} className="admin-btn-secondary">
+            <FolderOpen className="w-4 h-4" />
+            Choose from Media Library
+          </button>
+          <p className="text-xs text-[#6b7280]">
+            Photo not uploaded yet?{' '}
+            <Link href="/media" className="text-blue-400 hover:underline">Upload it in Media Library</Link>, then choose it here.
+          </p>
+        </div>
       </div>
       <div className="grid md:grid-cols-2 gap-4">
         <div>
