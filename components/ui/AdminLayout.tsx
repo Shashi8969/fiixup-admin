@@ -10,7 +10,7 @@ import {
   Wrench, LayoutDashboard, MapPin, Settings,
   FileText, Package, Layers, LogOut,
   Menu, X, ChevronRight, Globe, Image,
-  Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox, BarChart3, Gauge,
+  Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox,
   Award, Images, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -33,9 +33,7 @@ const NAV = [
   { href: '/internal-links',      icon: Link2,           label: 'Internal Links'     },
   { href: '/leads',               icon: Inbox,           label: 'Leads'              },
   { href: '/settings',            icon: SlidersHorizontal, label: 'Site Settings'     },
-  { href: '/cms-health',          icon: Activity,        label: 'CMS Health'        },
-  { href: '/seo-health',          icon: Gauge,           label: 'SEO Health'        },
-  { href: '/project-audit',       icon: BarChart3,       label: 'Project Audit'      },
+  { href: '/site-health',         icon: Activity,        label: 'Site Health'       },
   { href: '/redirects',            icon: Route,           label: 'Redirects'         },
 
 ]

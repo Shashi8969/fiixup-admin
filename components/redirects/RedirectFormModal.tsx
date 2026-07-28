@@ -8,18 +8,24 @@ interface RedirectFormModalProps {
   open: boolean
   mode: 'create' | 'edit'
   redirect: RedirectRecord | null
+  /** Prefills the form in 'create' mode only — e.g. pre-filling source/destination from a detected broken link. */
+  initialValues?: Partial<RedirectFormState>
   saving: boolean
   onClose: () => void
   onSubmit: (form: RedirectFormState) => Promise<void>
 }
 
-export function RedirectFormModal({ open, mode, redirect, saving, onClose, onSubmit }: RedirectFormModalProps) {
+export function RedirectFormModal({ open, mode, redirect, initialValues, saving, onClose, onSubmit }: RedirectFormModalProps) {
   const [form, setForm] = useState<RedirectFormState>(EMPTY_REDIRECT_FORM)
 
   useEffect(() => {
     if (!open) return
-    setForm(mode === 'edit' && redirect ? redirectToForm(redirect) : EMPTY_REDIRECT_FORM)
-  }, [open, mode, redirect])
+    if (mode === 'edit' && redirect) {
+      setForm(redirectToForm(redirect))
+      return
+    }
+    setForm({ ...EMPTY_REDIRECT_FORM, ...initialValues })
+  }, [open, mode, redirect, initialValues])
 
   if (!open) return null
 

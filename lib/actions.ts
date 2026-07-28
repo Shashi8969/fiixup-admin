@@ -603,6 +603,132 @@ export async function deleteRedirect(id: string, source: string): Promise<Action
   await revalidateMainSite([source])
   return { success: true, message: 'Redirect deleted.' }
 }
+
+// ── BROKEN LINKS (404 detection) ───────────────────────────────────────────────
+
+export type BrokenLinkRecord = {
+  path: string
+  hit_count: number
+  first_seen_at: string
+  last_seen_at: string
+  is_resolved: boolean
+  resolved_at: string | null
+  suggested_redirect_to: string | null
+  notes: string | null
+}
+
+export type BrokenLinkHitRecord = {
+  id: string
+  path: string
+  ip_address: string | null
+  referrer: string | null
+  user_agent: string | null
+  created_at: string
+}
+
+export type PublicRouteRecord = { path: string; pageType: string | null }
+
+export async function listBrokenLinks(): Promise<
+  { success: true; rows: BrokenLinkRecord[] } | { success: false; error: string }
+> {
+  const sb = getServiceClient()
+  const { data, error } = await sb
+    .from('broken_links')
+    .select('path,hit_count,first_seen_at,last_seen_at,is_resolved,resolved_at,suggested_redirect_to,notes')
+    .order('is_resolved', { ascending: true })
+    .order('hit_count', { ascending: false })
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, rows: (data ?? []) as BrokenLinkRecord[] }
+}
+
+export async function listBrokenLinkHits(path: string, limit = 100): Promise<
+  { success: true; rows: BrokenLinkHitRecord[] } | { success: false; error: string }
+> {
+  const sb = getServiceClient()
+  const { data, error } = await sb
+    .from('broken_link_hits')
+    .select('id,path,ip_address,referrer,user_agent,created_at')
+    .eq('path', path)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, rows: (data ?? []) as BrokenLinkHitRecord[] }
+}
+
+export async function resolveBrokenLink(path: string): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('broken_links')
+    .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+    .eq('path', path)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, message: 'Marked as resolved.' }
+}
+
+export async function reopenBrokenLink(path: string): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('broken_links')
+    .update({ is_resolved: false, resolved_at: null })
+    .eq('path', path)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, message: 'Reopened.' }
+}
+
+export async function deleteBrokenLink(path: string): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('broken_links').delete().eq('path', path)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, message: 'Deleted.' }
+}
+
+export async function updateBrokenLinkSuggestion(path: string, destination: string): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('broken_links')
+    .update({ suggested_redirect_to: destination.trim() || null })
+    .eq('path', path)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, message: 'Suggestion saved.' }
+}
+
+export async function listActivePublicRoutes(): Promise<
+  { success: true; routes: PublicRouteRecord[] } | { success: false; error: string }
+> {
+  const sb = getServiceClient()
+  const { data, error } = await sb
+    .from('cms_public_route_registry')
+    .select('url_path,page_type')
+    .eq('is_active', true)
+    .limit(5000)
+
+  if (error) return { success: false, error: error.message }
+  return {
+    success: true,
+    routes: (data ?? []).map((row) => ({
+      path: String(row.url_path ?? ''),
+      pageType: row.page_type as string | null,
+    })).filter((r) => r.path),
+  }
+}
+
+export async function pruneOldBrokenLinkHits(days = 90): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const { error, count } = await sb
+    .from('broken_link_hits')
+    .delete({ count: 'exact' })
+    .lt('created_at', cutoff)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true, message: `Removed ${count ?? 0} old hit record${count === 1 ? '' : 's'}.` }
+}
 export async function revalidateSiteSettings(): Promise<ActionResult> {
   const secret = process.env.REVALIDATE_SECRET
   const siteUrl = process.env.MAIN_SITE_URL ?? 'https://fiixup.in'

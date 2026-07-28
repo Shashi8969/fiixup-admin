@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import {
   MapPin, Settings, Layers, FileText,
-  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox, BarChart3,
+  Package, Globe, ArrowRight, Database, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox,
 } from 'lucide-react'
 
 type Stats = {
@@ -39,8 +39,7 @@ const NAV_CARDS = [
   { href: '/navigation',         icon: Navigation, label: 'Navigation',           desc: 'Manage scoped header/footer links for global, city and area pages' },
   { href: '/internal-links',     icon: Link2,      label: 'Internal Links',        desc: 'Manage related services, nearby areas and page-level link overrides'  },
   { href: '/settings',           icon: SlidersHorizontal, label: 'Site Settings', desc: 'Manage phone, WhatsApp, email and public website text'            },
-  { href: '/cms-health',         icon: Activity,   label: 'CMS Health',           desc: 'Check routes, SEO cache, table roles and legacy cleanup signals' },
-    { href: '/project-audit',       icon: BarChart3,  label: 'Project Audit',        desc: 'Review homepage readiness, public routes and navigation warnings' },
+  { href: '/site-health',        icon: Activity,   label: 'Site Health',          desc: 'SEO scores, CMS integrity, broken-link detection and redirects — all in one dashboard' },
 ]
 
 async function getStats(): Promise<Stats> {
