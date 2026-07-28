@@ -21,6 +21,10 @@
  *
  * Supabase table columns used: storage_path, public_url, folder, file_name,
  * file_size, mime_type, width, height, title, alt_text, crop_mode, crop_ratio
+ *
+ * Pass allowOriginal to also offer "upload as-is" (original bytes, original
+ * dimensions, original format — no crop, no WebP recompression). Used for
+ * assets like brand logos where the source PNG must stay pixel-exact.
  */
 
 import {
@@ -56,6 +60,8 @@ export const CROP_PRESETS: CropPreset[] = [
   { id: 'about',     label: 'About / Team',     ratio: 4 / 3,   defaultQuality: 82, maxWidth: 1200 },
   { id: 'blog',      label: 'Blog Thumbnail',   ratio: 16 / 9,  defaultQuality: 80, maxWidth: 800  },
   { id: 'service',   label: 'Service Hero',     ratio: 3 / 1,   defaultQuality: 78, maxWidth: 1400 },
+  { id: 'logo',      label: 'Brand Logo',       ratio: null,    defaultQuality: 92, maxWidth: 400  },
+  { id: 'gallery',   label: 'Gallery Photo',    ratio: 4 / 3,   defaultQuality: 80, maxWidth: 1400 },
   { id: 'freeform',  label: 'Freeform',         ratio: null,    defaultQuality: 82, maxWidth: 1600 },
 ]
 
@@ -93,6 +99,11 @@ function blobToObjectUrl(blob: Blob): string {
   return URL.createObjectURL(blob)
 }
 
+function getExtension(filename: string, fallback: string): string {
+  const match = /\.([a-zA-Z0-9]+)$/.exec(filename)
+  return match ? match[1].toLowerCase() : fallback
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 type Props = {
@@ -103,11 +114,17 @@ type Props = {
    * Useful when replacing an existing image without breaking DB references.
    */
   overwritePath?: string
+  /**
+   * Also offer "upload as-is" — original bytes, original dimensions, original
+   * format, no crop or recompression. For assets like brand logos where the
+   * source PNG must stay pixel-exact (e.g. transparent background artwork).
+   */
+  allowOriginal?: boolean
   onSuccess: (item: UploadedMediaItem) => void
   onClose: () => void
 }
 
-export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, onClose }: Props) {
+export function ImageCropUploadModal({ uploadFolder, overwritePath, allowOriginal = false, onSuccess, onClose }: Props) {
   const sb = getBrowserClient()
 
   // ── Stage machine ──────────────────────────────────────────────────────────
@@ -115,8 +132,10 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
 
   // ── File selection ─────────────────────────────────────────────────────────
   const fileInputRef  = useRef<HTMLInputElement>(null)
+  const originalFileInputRef = useRef<HTMLInputElement>(null)
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [sourceUrl,  setSourceUrl]  = useState<string>('')   // object URL for cropper
+  const [originalMode, setOriginalMode] = useState(false)    // true = skip crop/compress, upload original bytes
 
   // ── Crop ───────────────────────────────────────────────────────────────────
   const imgRef     = useRef<HTMLImageElement>(null)
@@ -215,7 +234,33 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
     setTitle(cleanFileBaseName(file.name))
     setCropDone(false)
     setCompressedBlob(null)
+    setOriginalMode(false)
     setStage('crop')
+  }
+
+  // ─── Original (as-is) file select — no crop, no recompression ─────────────
+  const handleOriginalFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showToast('error', 'Please select an image file')
+      return
+    }
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl)
+    const url = URL.createObjectURL(file)
+    setOriginalMode(true)
+    setSourceFile(file)
+    setSourceUrl(url)
+    setTitle(cleanFileBaseName(file.name))
+    setCompressedBlob(file)   // upload payload is the original file's bytes, untouched
+    setPreviewUrl(url)
+    setOutputDims(null)
+
+    const img = new Image()
+    img.onload = () => setOutputDims({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = url
+
+    setStage('compress')
   }
 
   // ─── Change preset mid-crop ───────────────────────────────────────────────
@@ -269,8 +314,10 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
 
     try {
       const baseName  = cleanFileBaseName(title || sourceFile.name)
-      const fileName  = `${baseName}.webp`
+      const ext        = originalMode ? getExtension(sourceFile.name, 'png') : 'webp'
+      const fileName  = `${baseName}.${ext}`
       const storagePath = overwritePath ?? `${uploadFolder}/${fileName}`
+      const contentType = originalMode ? (sourceFile.type || 'image/png') : 'image/webp'
 
       setUploadProgress(20)
 
@@ -278,7 +325,7 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
       const { error: storageErr } = await sb.storage
         .from('images')
         .upload(storagePath, compressedBlob, {
-          contentType: 'image/webp',
+          contentType,
           cacheControl: '3600',
           upsert: true,           // ← overwrites existing file at same path
         })
@@ -299,13 +346,13 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
             folder:        uploadFolder,
             file_name:     fileName,
             file_size:     compressedBlob.size,
-            mime_type:     'image/webp',
+            mime_type:     contentType,
             width:         outputDims?.w ?? null,
             height:        outputDims?.h ?? null,
             title:         title || baseName,
             alt_text:      altText,
-            crop_mode:     'cover',
-            crop_ratio:    preset.ratio ? `${preset.id}` : 'auto',
+            crop_mode:     originalMode ? 'original' : 'cover',
+            crop_ratio:    originalMode ? 'original' : (preset.ratio ? `${preset.id}` : 'auto'),
             focal_x:       50,
             focal_y:       50,
             updated_at:    new Date().toISOString(),
@@ -341,11 +388,11 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
               <Crop className="w-4 h-4 text-blue-400" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#e2e8f0]">Crop & Upload</h2>
+              <h2 className="text-sm font-bold text-[#e2e8f0]">{originalMode ? 'Upload Image' : 'Crop & Upload'}</h2>
               <p className="text-xs text-[#6b7280]">
                 {stage === 'select'   && 'Choose an image to begin'}
                 {stage === 'crop'     && `Cropping for ${preset.label}`}
-                {stage === 'compress' && 'Adjust quality before uploading'}
+                {stage === 'compress' && (originalMode ? 'Review before uploading — original file, no compression' : 'Adjust quality before uploading')}
                 {stage === 'uploading'&& 'Uploading to Supabase…'}
                 {stage === 'done'     && 'Upload complete!'}
               </p>
@@ -396,6 +443,26 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
                 className="hidden"
                 onChange={handleFileSelect}
               />
+
+              {allowOriginal && (
+                <>
+                  <p className="text-xs text-[#374151]">or</p>
+                  <button
+                    type="button"
+                    onClick={() => originalFileInputRef.current?.click()}
+                    className="text-xs font-medium text-blue-400 underline decoration-dotted underline-offset-4 transition-colors hover:text-blue-300"
+                  >
+                    Upload PNG as-is — original size, no crop or compression
+                  </button>
+                  <input
+                    ref={originalFileInputRef}
+                    type="file"
+                    accept="image/png"
+                    className="hidden"
+                    onChange={handleOriginalFileSelect}
+                  />
+                </>
+              )}
             </div>
           )}
 
@@ -496,75 +563,86 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
 
                 {/* Live size badge */}
                 <div className="bg-[#1a1d27] border border-[#2a2d3e] rounded-2xl p-4 flex flex-col items-center gap-1">
-                  <p className="text-xs text-[#6b7280] font-medium">Output size</p>
+                  <p className="text-xs text-[#6b7280] font-medium">{originalMode ? 'Original size' : 'Output size'}</p>
                   <p className={clsx(
                     'text-3xl font-black tabular-nums',
+                    originalMode ? 'text-blue-400' :
                     compressedBlob && compressedBlob.size < 80_000 ? 'text-green-400' :
                     compressedBlob && compressedBlob.size < 150_000 ? 'text-yellow-400' : 'text-red-400'
                   )}>
                     {compressedBlob ? formatSize(compressedBlob.size) : '—'}
                   </p>
                   {outputDims && (
-                    <p className="text-xs text-[#475569]">{outputDims.w} × {outputDims.h} px · WebP</p>
+                    <p className="text-xs text-[#475569]">
+                      {outputDims.w} × {outputDims.h} px · {originalMode ? getExtension(sourceFile?.name ?? '', 'png').toUpperCase() : 'WebP'}
+                    </p>
                   )}
-                  <p className="text-[10px] text-[#374151] mt-1">Target: 50–80 KB</p>
+                  {originalMode ? (
+                    <p className="text-[10px] text-[#374151] mt-1">Uploaded exactly as selected — no resize or recompression.</p>
+                  ) : (
+                    <p className="text-[10px] text-[#374151] mt-1">Target: 50–80 KB</p>
+                  )}
                 </div>
 
-                {/* Quality slider */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-xs font-bold text-[#94a3b8] uppercase tracking-wider">Quality</p>
-                    <span className="text-sm font-black text-blue-400 tabular-nums">{quality}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={20}
-                    max={100}
-                    step={1}
-                    value={quality}
-                    onChange={e => setQuality(Number(e.target.value))}
-                    className="w-full h-2 rounded-full bg-[#2a2d3e] appearance-none cursor-pointer
-                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
-                      [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500
-                      [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg
-                      [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5
-                      [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-500
-                      [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #2563eb ${quality}%, #2a2d3e ${quality}%)`
-                    }}
-                  />
-                  <div className="flex justify-between text-[10px] text-[#374151] mt-1">
-                    <span>Smaller file</span>
-                    <span>Better quality</span>
-                  </div>
-                </div>
+                {!originalMode && (
+                  <>
+                    {/* Quality slider */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-xs font-bold text-[#94a3b8] uppercase tracking-wider">Quality</p>
+                        <span className="text-sm font-black text-blue-400 tabular-nums">{quality}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={20}
+                        max={100}
+                        step={1}
+                        value={quality}
+                        onChange={e => setQuality(Number(e.target.value))}
+                        className="w-full h-2 rounded-full bg-[#2a2d3e] appearance-none cursor-pointer
+                          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
+                          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500
+                          [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg
+                          [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5
+                          [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-500
+                          [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, #2563eb ${quality}%, #2a2d3e ${quality}%)`
+                        }}
+                      />
+                      <div className="flex justify-between text-[10px] text-[#374151] mt-1">
+                        <span>Smaller file</span>
+                        <span>Better quality</span>
+                      </div>
+                    </div>
 
-                {/* Quick presets */}
-                <div>
-                  <p className="text-xs font-bold text-[#94a3b8] uppercase tracking-wider mb-2">Quick presets</p>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[
-                      { label: 'Web', q: 72, hint: '~40 KB' },
-                      { label: 'Balanced', q: 82, hint: '~60 KB' },
-                      { label: 'HQ', q: 92, hint: '~100 KB' },
-                    ].map(p => (
-                      <button
-                        key={p.label}
-                        onClick={() => setQuality(p.q)}
-                        className={clsx(
-                          'flex flex-col items-center py-2 rounded-xl text-xs border transition-all',
-                          quality === p.q
-                            ? 'bg-blue-600/20 border-blue-500 text-blue-300'
-                            : 'border-[#2a2d3e] text-[#6b7280] hover:border-[#3a4060] hover:text-white'
-                        )}
-                      >
-                        <span className="font-semibold">{p.label}</span>
-                        <span className="text-[10px] opacity-60">{p.hint}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                    {/* Quick presets */}
+                    <div>
+                      <p className="text-xs font-bold text-[#94a3b8] uppercase tracking-wider mb-2">Quick presets</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { label: 'Web', q: 72, hint: '~40 KB' },
+                          { label: 'Balanced', q: 82, hint: '~60 KB' },
+                          { label: 'HQ', q: 92, hint: '~100 KB' },
+                        ].map(p => (
+                          <button
+                            key={p.label}
+                            onClick={() => setQuality(p.q)}
+                            className={clsx(
+                              'flex flex-col items-center py-2 rounded-xl text-xs border transition-all',
+                              quality === p.q
+                                ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                                : 'border-[#2a2d3e] text-[#6b7280] hover:border-[#3a4060] hover:text-white'
+                            )}
+                          >
+                            <span className="font-semibold">{p.label}</span>
+                            <span className="text-[10px] opacity-60">{p.hint}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Alt text */}
                 <div>
@@ -593,7 +671,9 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
                       placeholder="my-image"
                       className="flex-1 bg-[#1a1d27] border border-[#2a2d3e] rounded-xl px-3 py-2 text-sm text-[#e2e8f0] placeholder:text-[#374151] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors"
                     />
-                    <span className="text-xs text-[#374151] flex-shrink-0">.webp</span>
+                    <span className="text-xs text-[#374151] flex-shrink-0">
+                      .{originalMode ? getExtension(sourceFile?.name ?? '', 'png') : 'webp'}
+                    </span>
                   </div>
                 </div>
 
@@ -612,16 +692,29 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
                   className="mt-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
                 >
                   <Upload className="w-4 h-4" />
-                  Save & Upload
+                  {originalMode ? 'Upload As-Is' : 'Save & Upload'}
                 </button>
 
-                {/* Back to crop */}
-                <button
-                  onClick={() => setStage('crop')}
-                  className="text-xs text-[#6b7280] hover:text-white flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Crop className="w-3 h-3" /> Back to crop
-                </button>
+                {/* Back / re-select */}
+                {originalMode ? (
+                  <button
+                    onClick={() => {
+                      setStage('select')
+                      setOriginalMode(false)
+                      if (originalFileInputRef.current) originalFileInputRef.current.value = ''
+                    }}
+                    className="text-xs text-[#6b7280] hover:text-white flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Choose different image
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setStage('crop')}
+                    className="text-xs text-[#6b7280] hover:text-white flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Crop className="w-3 h-3" /> Back to crop
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -651,7 +744,7 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
               <div className="text-center">
                 <p className="text-base font-bold text-[#e2e8f0]">Uploaded successfully!</p>
                 <p className="text-sm text-[#6b7280] mt-1">
-                  {compressedBlob ? formatSize(compressedBlob.size) : ''} · {outputDims ? `${outputDims.w}×${outputDims.h}` : ''} · WebP
+                  {compressedBlob ? formatSize(compressedBlob.size) : ''} · {outputDims ? `${outputDims.w}×${outputDims.h}` : ''} · {originalMode ? getExtension(sourceFile?.name ?? '', 'png').toUpperCase() : 'WebP'}
                 </p>
               </div>
               {previewUrl && (
@@ -671,7 +764,9 @@ export function ImageCropUploadModal({ uploadFolder, overwritePath, onSuccess, o
                     setCroppedCanvas(null)
                     setAltText('')
                     setTitle('')
+                    setOriginalMode(false)
                     if (fileInputRef.current) fileInputRef.current.value = ''
+                    if (originalFileInputRef.current) originalFileInputRef.current.value = ''
                   }}
                   className="text-sm text-[#6b7280] hover:text-white border border-[#2a2d3e] hover:border-[#3a4060] px-4 py-2 rounded-xl transition-colors"
                 >

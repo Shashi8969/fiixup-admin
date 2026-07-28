@@ -659,3 +659,15 @@ export async function revalidateReviewSources(): Promise<ActionResult> {
 export async function revalidateSeoPages(): Promise<ActionResult> {
   return revalidateMainSiteTag('seo-pages')
 }
+
+export async function revalidateBrandLogos(): Promise<ActionResult> {
+  return revalidateMainSiteTag('brand-logos')
+}
+
+export async function revalidateGallery(): Promise<ActionResult> {
+  return revalidateMainSiteTag('gallery')
+}
+
+export async function revalidateTeamMembers(): Promise<ActionResult> {
+  return revalidateMainSiteTag('team-members')
+}
