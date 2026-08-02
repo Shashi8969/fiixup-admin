@@ -6,11 +6,12 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Activity, Gauge, LayoutDashboard, RouteOff } from 'lucide-react'
+import { Activity, Database, Gauge, LayoutDashboard, RouteOff } from 'lucide-react'
 import { clsx } from 'clsx'
 import { OverviewSection } from '@/components/health/sections/OverviewSection'
 import { SeoHealthSection } from '@/components/health/sections/SeoHealthSection'
 import { CmsHealthSection } from '@/components/health/sections/CmsHealthSection'
+import { CacheRedirectsSection } from '@/components/health/sections/CacheRedirectsSection'
 import { BrokenLinksPanel } from '@/components/brokenLinks/BrokenLinksPanel'
 
 const TABS = [
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'broken-links', label: 'Broken Links', icon: RouteOff },
   { id: 'seo-health', label: 'SEO Health', icon: Gauge },
   { id: 'cms-health', label: 'CMS Health', icon: Activity },
+  { id: 'cache-redirects', label: 'Cache & Redirects', icon: Database },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -65,6 +67,7 @@ function SiteHealthInner() {
       {tab === 'broken-links' && <BrokenLinksPanel />}
       {tab === 'seo-health' && <SeoHealthSection />}
       {tab === 'cms-health' && <CmsHealthSection />}
+      {tab === 'cache-redirects' && <CacheRedirectsSection />}
     </div>
   )
 }

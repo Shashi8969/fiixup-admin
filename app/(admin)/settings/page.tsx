@@ -34,7 +34,7 @@ type NewSettingForm = {
   group_name: string
   label: string
   description: string
-  input_type: 'text' | 'textarea' | 'url' | 'email' | 'tel'
+  input_type: 'text' | 'textarea' | 'url' | 'email' | 'tel' | 'select'
   sort_order: string
   is_public: boolean
 }
@@ -71,8 +71,19 @@ function normalizeKey(value: string) {
 
 function inputType(type: string | null | undefined) {
   const value = clean(type, 'text').toLowerCase()
-  if (['textarea', 'url', 'email', 'tel', 'number'].includes(value)) return value
+  if (['textarea', 'url', 'email', 'tel', 'number', 'select'].includes(value)) return value
   return 'text'
+}
+
+// Options for `select`-type settings, keyed by setting key. A generic
+// options-encoding column isn't worth adding for the one setting that
+// currently needs this — extend here if more select-type settings show up.
+const SELECT_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  image_quality_mode: [
+    { value: 'high', label: 'High — sharpest images, larger files' },
+    { value: 'balanced', label: 'Balanced — recommended default' },
+    { value: 'fast', label: 'Fast — smaller files, quicker loading' },
+  ],
 }
 
 export default function SiteSettingsPage() {
@@ -208,6 +219,21 @@ export default function SiteSettingsPage() {
   const renderSettingInput = (setting: SiteSetting) => {
     const value = draftValues[setting.key] ?? ''
     const type = inputType(setting.input_type)
+    const options = SELECT_OPTIONS[setting.key]
+
+    if (type === 'select' && options) {
+      return (
+        <select
+          value={value}
+          onChange={(event) => updateDraftValue(setting.key, event.target.value)}
+          className="admin-input"
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      )
+    }
 
     if (type === 'textarea') {
       return (

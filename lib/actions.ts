@@ -897,3 +897,39 @@ export async function revalidateGallery(): Promise<ActionResult> {
 export async function revalidateTeamMembers(): Promise<ActionResult> {
   return revalidateMainSiteTag('team-members')
 }
+
+// ── MANUAL CACHE CONTROL (Site Health → Cache & Redirects tab) ────────────────
+
+const CLEARABLE_TAGS = [
+  'cities', 'areas', 'services', 'service-categories', 'location-services',
+  'posts', 'redirects', 'site-settings', 'navigation-links', 'page-link-overrides',
+  'faq-library', 'reviews', 'seo-pages', 'homepage', 'brand-logos', 'gallery', 'team-members',
+] as const
+export type ClearableTag = (typeof CLEARABLE_TAGS)[number]
+
+export async function clearAllCache(): Promise<ActionResult> {
+  const secret = process.env.REVALIDATE_SECRET
+  const siteUrl = process.env.MAIN_SITE_URL ?? 'https://fiixup.in'
+
+  if (!secret) {
+    return { success: false, error: 'REVALIDATE_SECRET is missing in admin environment.' }
+  }
+
+  const response = await fetch(`${siteUrl}/api/revalidate?secret=${secret}&path=all`, {
+    method: 'POST',
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    return { success: false, error: 'Live site cache clear failed — check REVALIDATE_SECRET matches on both sides.' }
+  }
+
+  return { success: true, message: 'All live site cache cleared.' }
+}
+
+export async function clearCacheByTag(tag: ClearableTag): Promise<ActionResult> {
+  if (!CLEARABLE_TAGS.includes(tag)) {
+    return { success: false, error: `Unknown cache tag: ${tag}` }
+  }
+  return revalidateMainSiteTag(tag)
+}
