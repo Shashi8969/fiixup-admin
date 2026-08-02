@@ -21,6 +21,7 @@ const NAV = [
   { href: '/cities',              icon: MapPin,          label: 'Cities'            },
   { href: '/location-services',   icon: Settings,        label: 'Location Services' },
   { href: '/city-service-pages',  icon: Layers,          label: 'Category Pages'    },
+  { href: '/global-service-pages',icon: Globe,           label: 'Global Pages'      },
   { href: '/posts',               icon: FileText,        label: 'Blog Posts'        },
   { href: '/services',            icon: Package,         label: 'Services'          },
   { href: '/media',               icon: Image,           label: 'Media Library'     },

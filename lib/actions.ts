@@ -467,6 +467,106 @@ export async function deleteCspTestimonial(
   return { success: true, message: 'Testimonial deleted.' }
 }
 
+// ── GLOBAL SERVICE PAGES ──────────────────────────────────────────────────────
+// National/city-targeted-by-name pages (e.g. /bangalore-towing-service). Path
+// is derived from service_slug since these don't live under a city segment.
+
+export async function saveGlobalServicePage(
+  gspId: string,
+  serviceSlug: string,
+  data: Record<string, unknown>
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('global_service_pages')
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
+    .eq('id', gspId)
+
+  if (error) return { success: false, error: error.message }
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'Page saved.' }
+}
+
+export async function saveGspPricingRow(
+  rowId: string,
+  gspId: string,
+  serviceSlug: string,
+  data: Record<string, unknown>
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('gsp_pricing_rows').update(sanitizeWriteData(data)).eq('id', rowId)
+  if (error) return { success: false, error: error.message }
+  await sb.from('global_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', gspId)
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'Pricing row saved.' }
+}
+
+export async function addGspPricingRow(
+  gspId: string,
+  serviceSlug: string,
+  data: Record<string, unknown>
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('gsp_pricing_rows').insert({ ...sanitizeWriteData(data), gsp_id: gspId })
+  if (error) return { success: false, error: error.message }
+  await sb.from('global_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', gspId)
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'Pricing row added.' }
+}
+
+export async function deleteGspPricingRow(
+  rowId: string,
+  gspId: string,
+  serviceSlug: string
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('gsp_pricing_rows').delete().eq('id', rowId)
+  if (error) return { success: false, error: error.message }
+  await sb.from('global_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', gspId)
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'Pricing row deleted.' }
+}
+
+export async function saveGspFaq(
+  faqId: string,
+  gspId: string,
+  serviceSlug: string,
+  data: Record<string, unknown>
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('gsp_faqs').update(sanitizeWriteData(data)).eq('id', faqId)
+  if (error) return { success: false, error: error.message }
+  await sb.from('global_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', gspId)
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'FAQ saved.' }
+}
+
+export async function addGspFaq(
+  gspId: string,
+  serviceSlug: string,
+  data: Record<string, unknown>
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('gsp_faqs').insert({ ...sanitizeWriteData(data), gsp_id: gspId })
+  if (error) return { success: false, error: error.message }
+  await sb.from('global_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', gspId)
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'FAQ added.' }
+}
+
+export async function deleteGspFaq(
+  faqId: string,
+  gspId: string,
+  serviceSlug: string
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb.from('gsp_faqs').delete().eq('id', faqId)
+  if (error) return { success: false, error: error.message }
+  await sb.from('global_service_pages').update({ updated_at: new Date().toISOString() }).eq('id', gspId)
+  await revalidateMainSite([`/${serviceSlug}`])
+  return { success: true, message: 'FAQ deleted.' }
+}
+
 // ── POSTS ─────────────────────────────────────────────────────────────────────
 
 export async function savePost(

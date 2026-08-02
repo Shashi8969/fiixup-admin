@@ -78,8 +78,6 @@ export function buildSchemaGraph(input: SchemaBuildInput) {
   const description = s(overrides.description) || getDescription(record)
   const citySlug = s(record.city_slug) || s(record.slug)
   const areaSlug = s(record.area_slug)
-  const rating = Number(record.schema_aggregate_rating ?? record.schema_rating ?? 4.9)
-  const reviewCount = Number(record.schema_review_count ?? record.review_count ?? 150)
   const graph: Record<string, unknown>[] = []
 
   for (const type of selectedTypes) {
@@ -109,7 +107,7 @@ export function buildSchemaGraph(input: SchemaBuildInput) {
 
     if (type === 'LocalBusiness') {
       graph.push({
-        '@type': 'LocalBusiness',
+        '@type': ['AutoRepair', 'LocalBusiness'],
         '@id': `${SITE}#localbusiness`,
         name: 'Fiixup',
         url: SITE,
@@ -175,17 +173,6 @@ export function buildSchemaGraph(input: SchemaBuildInput) {
           })),
         })
       }
-    }
-
-    if (type === 'AggregateRating') {
-      graph.push({
-        '@type': 'AggregateRating',
-        itemReviewed: { '@type': 'Service', name },
-        ratingValue: rating || 4.9,
-        reviewCount: reviewCount || 150,
-        bestRating: 5,
-        worstRating: 1,
-      })
     }
 
     if (type === 'Article' || type === 'BlogPosting') {
