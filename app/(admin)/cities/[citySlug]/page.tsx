@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams }     from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }         from '@/components/ui/Field'
+import { ImagePickerField } from '@/components/media/ImagePickerField'
 import { SeoMetaPanel }  from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
@@ -205,7 +206,7 @@ export default function CityEditorPage() {
           onSaveKeywords={saveField('meta_keywords')}
           extraFields={
             <>
-              <Field label="OG Image URL" value={s(city.og_image_url)} onSave={saveField('og_image_url')} />
+              <ImagePickerField label="OG Image URL" value={s(city.og_image_url)} onSave={saveField('og_image_url')} />
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Schema Rating"       value={s(city.schema_aggregate_rating)} numeric onSave={saveNum('schema_aggregate_rating')} />
                 <Field label="Schema Review Count" value={s(city.schema_review_count)}     numeric onSave={saveNum('schema_review_count')} />
@@ -258,8 +259,10 @@ export default function CityEditorPage() {
           <Field label="Hero Tagline"    value={s(city.hero_tagline)}   onSave={saveField('hero_tagline')} />
           <Field label="Hero Heading"    value={s(city.hero_heading)}   onSave={saveField('hero_heading')} multiline rows={2} />
           <Field label="Hero Subheading" value={s(city.hero_subheading)} onSave={saveField('hero_subheading')} multiline rows={3} />
-          <Field label="Hero Image URL"  value={s(city.hero_image_url)} onSave={saveField('hero_image_url')} />
-          <Field label="Hero Image Alt"  value={s(city.hero_image_alt)} onSave={saveField('hero_image_alt')} />
+          <ImagePickerField
+            label="Hero Image URL" value={s(city.hero_image_url)} onSave={saveField('hero_image_url')}
+            altLabel="Hero Image Alt" altValue={s(city.hero_image_alt)} onSaveAlt={saveField('hero_image_alt')}
+          />
           <JsonField label="Hero Bullets (JSON array of strings)" value={city.hero_bullets} onSave={saveJson('hero_bullets')} />
           <JsonField label="Hero Stats (JSON array [{value,label}])" value={city.hero_stats} onSave={saveJson('hero_stats')} />
           <JsonField label="Trust Points (JSON array of strings)"   value={city.trust_points} onSave={saveJson('trust_points')} />
@@ -273,8 +276,10 @@ export default function CityEditorPage() {
           <Field label="About Heading"   value={s(city.about_heading)}   onSave={saveField('about_heading')} />
           <Field label="About Paragraph 1" value={s(city.about_para1)}  onSave={saveField('about_para1')} multiline rows={5} />
           <Field label="About Paragraph 2" value={s(city.about_para2)}  onSave={saveField('about_para2')} multiline rows={5} />
-          <Field label="About Image URL" value={s(city.about_image_url)} onSave={saveField('about_image_url')} />
-          <Field label="About Image Alt" value={s(city.about_image_alt)} onSave={saveField('about_image_alt')} />
+          <ImagePickerField
+            label="About Image URL" value={s(city.about_image_url)} onSave={saveField('about_image_url')}
+            altLabel="About Image Alt" altValue={s(city.about_image_alt)} onSaveAlt={saveField('about_image_alt')}
+          />
           <JsonField label="About Bullets (JSON)" value={city.about_bullets} onSave={saveJson('about_bullets')} />
           <Field label="Services Section Heading"  value={s(city.services_section_heading)}  onSave={saveField('services_section_heading')} />
           <Field label="Services Section Subtext"  value={s(city.services_section_subtext)}  onSave={saveField('services_section_subtext')} multiline rows={2} />

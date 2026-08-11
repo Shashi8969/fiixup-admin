@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams }        from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }            from '@/components/ui/Field'
+import { ImagePickerField } from '@/components/media/ImagePickerField'
 import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
@@ -189,7 +190,7 @@ export default function GlobalServicePageEditor() {
           extraFields={
             <>
               <Field label="Canonical URL" value={s(gsp.canonical_url)} onSave={save('canonical_url')} />
-              <Field label="OG Image URL"  value={s(gsp.og_image_url)}  onSave={save('og_image_url')} />
+              <ImagePickerField label="OG Image URL" value={s(gsp.og_image_url)} onSave={save('og_image_url')} />
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Service Category" value={s(gsp.service_category)} onSave={save('service_category')} />
                 <Field label="Service Duration" value={s(gsp.service_duration)} onSave={save('service_duration')} />
@@ -240,8 +241,10 @@ export default function GlobalServicePageEditor() {
           <Field label="Hero Heading"    value={s(gsp.hero_heading)}    onSave={save('hero_heading')} multiline rows={2} />
           <Field label="Hero Subheading" value={s(gsp.hero_subheading)} onSave={save('hero_subheading')} multiline rows={3} />
           <Field label="Hero Badge Text" value={s(gsp.hero_badge_text)} onSave={save('hero_badge_text')} />
-          <Field label="Hero Image URL"  value={s(gsp.hero_image_url)}  onSave={save('hero_image_url')} />
-          <Field label="Hero Image Alt"  value={s(gsp.hero_image_alt)}  onSave={save('hero_image_alt')} />
+          <ImagePickerField
+            label="Hero Image URL" value={s(gsp.hero_image_url)} onSave={save('hero_image_url')}
+            altLabel="Hero Image Alt" altValue={s(gsp.hero_image_alt)} onSaveAlt={save('hero_image_alt')}
+          />
         </div>
       )}
 

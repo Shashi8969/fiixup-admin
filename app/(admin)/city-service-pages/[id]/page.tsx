@@ -9,6 +9,7 @@ import { useParams }        from 'next/navigation'
 import Link                 from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }            from '@/components/ui/Field'
+import { ImagePickerField } from '@/components/media/ImagePickerField'
 import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
@@ -241,7 +242,7 @@ export default function CspEditorPage() {
           extraFields={
             <>
               <Field label="Canonical URL" value={s(csp.canonical_url)} onSave={save('canonical_url')} />
-              <Field label="OG Image URL"  value={s(csp.og_image_url)}  onSave={save('og_image_url')} />
+              <ImagePickerField label="OG Image URL" value={s(csp.og_image_url)} onSave={save('og_image_url')} />
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Schema Rating"       value={s(csp.schema_aggregate_rating)} numeric onSave={saveNum('schema_aggregate_rating')} />
                 <Field label="Schema Review Count" value={s(csp.schema_review_count)}     numeric onSave={saveNum('schema_review_count')} />

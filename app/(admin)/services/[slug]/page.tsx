@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useParams }           from 'next/navigation'
 import { getBrowserClient }    from '@/lib/supabase'
 import { Field }               from '@/components/ui/Field'
+import { ImagePickerField }    from '@/components/media/ImagePickerField'
 import { SeoMetaPanel }        from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }     from '@/components/navigation/AdminBackButton'
@@ -170,7 +171,7 @@ export default function ServiceEditorPage() {
           onSaveTitle={save('meta_title')}
           onSaveDescription={save('meta_description')}
           onSaveKeywords={save('meta_keywords')}
-          extraFields={<Field label="OG Image URL" value={String(svc.og_image_url ?? '')} onSave={save('og_image_url')} />}
+          extraFields={<ImagePickerField label="OG Image URL" value={String(svc.og_image_url ?? '')} onSave={save('og_image_url')} />}
         />
       )}
 
@@ -206,8 +207,10 @@ export default function ServiceEditorPage() {
             <Field label="Price To (int, ₹)"   value={String(svc.price_to_int ?? '')}  numeric onSave={save('price_to_int')} />
           </div>
           <Field label="Icon (Lucide icon name)" value={String(svc.icon ?? '')} onSave={save('icon')} />
-          <Field label="Image URL"     value={String(svc.image_url ?? '')}  onSave={save('image_url')} />
-          <Field label="Image Alt"     value={String(svc.image_alt ?? '')}  onSave={save('image_alt')} />
+          <ImagePickerField
+            label="Image URL" value={String(svc.image_url ?? '')} onSave={save('image_url')}
+            altLabel="Image Alt" altValue={String(svc.image_alt ?? '')} onSaveAlt={save('image_alt')}
+          />
         </div>
       )}
 

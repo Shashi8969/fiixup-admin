@@ -9,6 +9,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams }        from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }            from '@/components/ui/Field'
+import { ImagePickerField } from '@/components/media/ImagePickerField'
 import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
@@ -21,9 +22,15 @@ import {
 import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
+import { BlockEditor }      from '@/components/posts/editor/BlockEditor'
+import { ImportContentModal } from '@/components/posts/editor/ImportContentModal'
+import { LinkOptionsProvider } from '@/components/posts/editor/LinkOptionsContext'
+import type { Block }       from '@/components/posts/editor/types'
+import { toBlocks, stripIds } from '@/utils/posts/blockUtils'
+import { PageLayoutEditor, type PageLayoutRow } from '@/components/location-services/editor/PageLayoutEditor'
 import {
   ArrowLeft, ExternalLink, RefreshCw, Loader2,
-  Globe, BarChart2,
+  Globe, BarChart2, ClipboardPaste,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -52,6 +59,7 @@ const TABS = [
   { id: 'images',      label: 'Images'      },
   { id: 'schema',      label: 'Schema'      },
   { id: 'seo_content', label: 'SEO Content' },
+  { id: 'layout',      label: 'Page Layout'},
   { id: 'analytics',   label: 'Analytics'  },
 ] as const
 type TabId = typeof TABS[number]['id']
@@ -73,6 +81,10 @@ export default function LSEditorPage() {
   const [images,   setImages]   = useState<Row[]>([])
   const [seoPage,  setSeoPage]  = useState<Row | null>(null)
   const [analytics,setAnalytics]= useState<Row | null>(null)
+  const [blocks,   setBlocks]   = useState<Block[]>([])
+  const [savingBlocks, setSavingBlocks] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [savingLayout, setSavingLayout] = useState(false)
 
   // ── Fetch ALL ──────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -81,6 +93,7 @@ export default function LSEditorPage() {
       .from('location_services').select('*').eq('id', id).single()
     if (!lsData) { setLoading(false); return }
     setLs(lsData)
+    setBlocks(toBlocks(lsData.content_blocks))
 
     const [p, t, f, n, r, img, sp] = await Promise.all([
       sb.from('ls_pricing_rows')    .select('*').eq('location_service_id', id).order('sort_order'),
@@ -165,6 +178,24 @@ export default function LSEditorPage() {
     if (error) { showToast('error', error.message); return }
     setLs(p => p ? { ...p, [col]: val } : p)
     showToast('success', 'Saved')
+  }
+
+  const saveLayout = async (rows: PageLayoutRow[]) => {
+    setSavingLayout(true)
+    await saveLS('page_layout')(rows)
+    setSavingLayout(false)
+  }
+
+  const saveContentBlocks = async (bl: Block[]) => {
+    setSavingBlocks(true)
+    const stripped = stripIds(bl)
+    const { error } = await sb.from('location_services')
+      .update({ content_blocks: stripped, updated_at: new Date().toISOString() }).eq('id', id)
+    setSavingBlocks(false)
+    if (error) { showToast('error', error.message); return }
+    setBlocks(bl)
+    setLs(p => p ? { ...p, content_blocks: stripped } : p)
+    showToast('success', 'Content blocks saved')
   }
 
   // Child tables remain editable for compatibility, while location_services is
@@ -304,7 +335,7 @@ export default function LSEditorPage() {
           extraFields={
             <>
               <Field label="Canonical URL" value={s(ls.canonical_url)} onSave={saveLS('canonical_url')} />
-              <Field label="OG Image URL"  value={s(ls.og_image_url)}  onSave={saveLS('og_image_url')} />
+              <ImagePickerField label="OG Image URL" value={s(ls.og_image_url)} onSave={saveLS('og_image_url')} />
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Schema Rating"       value={s(ls.schema_aggregate_rating)} numeric onSave={saveLSNum('schema_aggregate_rating')} />
                 <Field label="Schema Review Count" value={s(ls.schema_review_count)}     numeric onSave={saveLSNum('schema_review_count')} />
@@ -359,11 +390,21 @@ export default function LSEditorPage() {
       {tab === 'hero' && (
         <div className="admin-card p-6 space-y-4">
           <h2 className="admin-section-title">Hero Section</h2>
+          <div>
+            <Field label="Service Display Name" value={s(ls.service_name)} onSave={saveLS('service_name')} />
+            <p className="text-xs text-[#6b7280] mt-1.5">
+              Reused site-wide in headings like &quot;{'{name}'} in {'{Area}'}&quot;, &quot;{'{name}'} Cost&quot;, FAQs, and the nearby-areas links.
+              Keep it generic (e.g. &quot;Car Mechanic&quot;) — <strong>don&apos;t include a city or area name here</strong>, or those headings will repeat the location twice
+              (e.g. &quot;Car Mechanic in HSR Layout in HSR Layout&quot;). Location-specific phrasing belongs in Hero Heading below.
+            </p>
+          </div>
           <Field label="Hero Heading"    value={s(ls.hero_heading)}    onSave={saveLS('hero_heading')} multiline rows={2} />
           <Field label="Hero Subheading" value={s(ls.hero_subheading)} onSave={saveLS('hero_subheading')} multiline rows={3} />
           <Field label="Hero Badge Text" value={s(ls.hero_badge_text)} onSave={saveLS('hero_badge_text')} />
-          <Field label="Hero Image URL"  value={s(ls.hero_image_url)}  onSave={saveLS('hero_image_url')} />
-          <Field label="Hero Image Alt"  value={s(ls.hero_image_alt)}  onSave={saveLS('hero_image_alt')} />
+          <ImagePickerField
+            label="Hero Image URL" value={s(ls.hero_image_url)} onSave={saveLS('hero_image_url')}
+            altLabel="Hero Image Alt" altValue={s(ls.hero_image_alt)} onSaveAlt={saveLS('hero_image_alt')}
+          />
         </div>
       )}
 
@@ -525,15 +566,73 @@ export default function LSEditorPage() {
 
       {/* ══════════════ SEO CONTENT ══════════════ */}
       {tab === 'seo_content' && (
-        <div className="admin-card p-6 space-y-4">
-          <h2 className="admin-section-title">Long-Form SEO Content</h2>
-          <Field label="SEO Intro Heading" value={s(ls.seo_intro_heading)} onSave={saveLS('seo_intro_heading')} />
-          <Field label="SEO Intro Body"    value={s(ls.seo_intro_body)}    onSave={saveLS('seo_intro_body')} multiline rows={6} />
-          <Field label="SEO Conclusion"    value={s(ls.seo_conclusion)}    onSave={saveLS('seo_conclusion')} multiline rows={4} />
-          <JsonField
-            label="SEO Sections [{heading, body}]"
-            value={ls.seo_sections}
-            onSave={saveLSJson('seo_sections')}
+        <div className="space-y-5">
+          <LinkOptionsProvider>
+            <div className="admin-card p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 className="admin-section-title">Content Blocks (recommended)</h2>
+                  <p className="text-xs text-[#6b7280] mt-1">
+                    Same paste/import + block editor as blog posts — paste an article and it&apos;s auto-converted into blocks below.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowImport(true)} className="admin-btn-secondary text-xs">
+                    <ClipboardPaste className="w-4 h-4" /> Paste / Import Content
+                  </button>
+                  <button onClick={() => saveContentBlocks(blocks)} disabled={savingBlocks} className="admin-btn-primary text-xs">
+                    {savingBlocks ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Save Content Blocks
+                  </button>
+                </div>
+              </div>
+
+              {showImport && (
+                <ImportContentModal
+                  hasExistingBlocks={blocks.length > 0}
+                  onClose={() => setShowImport(false)}
+                  onInsert={(newBlocks, mode) => {
+                    setBlocks(mode === 'replace' ? newBlocks : [...blocks, ...newBlocks])
+                    setShowImport(false)
+                  }}
+                />
+              )}
+
+              <BlockEditor blocks={blocks} onChange={setBlocks} />
+
+              <div className="flex justify-end">
+                <button onClick={() => saveContentBlocks(blocks)} disabled={savingBlocks} className="admin-btn-primary">
+                  {savingBlocks ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Save Content Blocks
+                </button>
+              </div>
+            </div>
+          </LinkOptionsProvider>
+
+          <div className="admin-card p-6 space-y-4">
+            <h2 className="admin-section-title">Legacy Fields (still supported)</h2>
+            <Field label="SEO Intro Heading" value={s(ls.seo_intro_heading)} onSave={saveLS('seo_intro_heading')} />
+            <Field label="SEO Intro Body"    value={s(ls.seo_intro_body)}    onSave={saveLS('seo_intro_body')} multiline rows={6} />
+            <Field label="SEO Conclusion"    value={s(ls.seo_conclusion)}    onSave={saveLS('seo_conclusion')} multiline rows={4} />
+            <JsonField
+              key={JSON.stringify(ls.seo_sections)}
+              label="SEO Sections [{heading, body}]"
+              value={ls.seo_sections}
+              onSave={saveLSJson('seo_sections')}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════ PAGE LAYOUT ══════════════ */}
+      {tab === 'layout' && (
+        <div className="admin-card p-6">
+          <h2 className="admin-section-title mb-1">Page Layout</h2>
+          <PageLayoutEditor
+            key={JSON.stringify(ls.page_layout)}
+            value={(Array.isArray(ls.page_layout) ? ls.page_layout : []) as PageLayoutRow[]}
+            onSave={saveLayout}
+            saving={savingLayout}
           />
         </div>
       )}

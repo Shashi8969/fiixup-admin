@@ -2,15 +2,25 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { clsx } from 'clsx'
-import { Check, Code2, Copy, Loader2, Save, Sparkles } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Code2, Copy, Loader2, Save, Sparkles } from 'lucide-react'
 import { showToast } from '@/components/ui/Toast'
 import { buildSchemaGraph } from '@/utils/schema/buildSchemaGraph'
+import { overrideFieldsFor, validateSchemaGraph } from '@/utils/schema/schemaFieldRegistry'
 import {
   RECOMMENDED_SCHEMA_TYPES,
   SCHEMA_OPTIONS,
   type SchemaEntityType,
   type SchemaPageKind,
 } from '@/utils/schema/schemaTypes'
+
+// Kinds where schema_json is the sole, directly-served value with no
+// Postgres trigger recomputing it — pasting a full custom JSON-LD block is
+// safe and effective here. For every other kind, a DB trigger rebuilds the
+// core schema fresh on every save (and merges the override fields above
+// into it) — a pasted full block there would either be ignored or, worse,
+// freeze the page's schema until manually cleared. See schema_overrides
+// merge in fn_build_ls_seo_page / fn_build_csp_seo_page / trg_fn_gsp_schema.
+const RAW_JSON_SAFE_KINDS: SchemaPageKind[] = ['post']
 
 type SaveResult = { success: boolean; error?: string; message?: string }
 
@@ -39,10 +49,17 @@ export function SchemaMultiSelector({
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showJson, setShowJson] = useState(true)
+  const rawJsonSafe = RAW_JSON_SAFE_KINDS.includes(kind)
+  const [useRawJson, setUseRawJson] = useState(false)
+  const [rawJsonText, setRawJsonText] = useState('')
+  const [rawJsonError, setRawJsonError] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const allowedOptions = useMemo(() => {
     return Object.entries(SCHEMA_OPTIONS).filter(([, option]) => option.bestFor.includes(kind)) as [SchemaEntityType, typeof SCHEMA_OPTIONS[SchemaEntityType]][]
   }, [kind])
+
+  const overrideFields = useMemo(() => overrideFieldsFor(selected), [selected])
 
   const schemaJson = useMemo(() => buildSchemaGraph({
     kind,
@@ -53,6 +70,11 @@ export function SchemaMultiSelector({
     blocks,
     overrides: localOverrides,
   }), [kind, record, selected, urlPath, faqs, blocks, localOverrides])
+
+  const warnings = useMemo(
+    () => validateSchemaGraph(Array.isArray(schemaJson['@graph']) ? schemaJson['@graph'] as Record<string, unknown>[] : []),
+    [schemaJson]
+  )
 
   const jsonString = JSON.stringify(schemaJson, null, 2)
   const graphCount = Array.isArray(schemaJson['@graph']) ? schemaJson['@graph'].length : 0
@@ -68,15 +90,25 @@ export function SchemaMultiSelector({
   const applyRecommended = () => setSelected(recommended)
 
   const saveSchema = async () => {
+    let payloadSchemaJson: Record<string, unknown> = schemaJson
+    if (useRawJson) {
+      try {
+        payloadSchemaJson = JSON.parse(rawJsonText)
+        setRawJsonError('')
+      } catch {
+        setRawJsonError('Invalid JSON — fix before saving')
+        return
+      }
+    }
     setSaving(true)
-    const result = await onSave({ schema_types: selected, schema_overrides: localOverrides, schema_json: schemaJson })
+    const result = await onSave({ schema_types: selected, schema_overrides: localOverrides, schema_json: payloadSchemaJson })
     setSaving(false)
     if (result.success) showToast('success', result.message ?? 'Schema saved')
     else showToast('error', result.error ?? 'Schema save failed')
   }
 
   const copy = async () => {
-    await navigator.clipboard.writeText(jsonString)
+    await navigator.clipboard.writeText(useRawJson ? rawJsonText : jsonString)
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
   }
@@ -131,34 +163,100 @@ export function SchemaMultiSelector({
       </div>
 
       <div className="admin-card p-5 space-y-4">
-        <h3 className="admin-section-title">Optional Schema Overrides</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <SchemaInput label="Schema Name / Headline" value={String(localOverrides.name ?? localOverrides.headline ?? '')} onChange={(v) => { setOverride('name', v); setOverride('headline', v) }} />
-          <SchemaInput label="Description Override" value={String(localOverrides.description ?? '')} onChange={(v) => setOverride('description', v)} />
-          {kind === 'post' && <SchemaInput label="HowTo Total Time" placeholder="PT30M" value={String(localOverrides.totalTime ?? '')} onChange={(v) => setOverride('totalTime', v)} />}
-          {kind === 'post' && <SchemaInput label="Estimated Cost INR" placeholder="499" value={String(localOverrides.estimatedCost ?? '')} onChange={(v) => setOverride('estimatedCost', v)} />}
+        <div>
+          <h3 className="admin-section-title">Schema Field Overrides</h3>
+          <p className="text-xs text-[#6b7280] mt-1">
+            Every field is optional — leave blank to keep the auto-filled value shown as its placeholder. Fields only appear for the schema types selected above.
+          </p>
         </div>
+        {overrideFields.length === 0 ? (
+          <p className="text-xs text-[#6b7280] italic">Select a schema type above to see its overridable fields.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {overrideFields.map((field) => (
+              <SchemaInput
+                key={field.key}
+                label={field.label}
+                placeholder={field.placeholder}
+                value={String(localOverrides[field.key] ?? '')}
+                onChange={(v) => setOverride(field.key, v)}
+              />
+            ))}
+          </div>
+        )}
+
+        {warnings.length > 0 && (
+          <div className="flex items-start gap-2 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <ul className="space-y-0.5">
+              {warnings.map((w) => <li key={w}>{w}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <div className="admin-card p-5">
+        <button onClick={() => setShowAdvanced(p => !p)} className="flex items-center gap-2 text-sm font-semibold text-[#e2e8f0] w-full">
+          {showAdvanced ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          Advanced: Custom JSON-LD
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 space-y-3">
+            {rawJsonSafe ? (
+              <>
+                <label className="flex items-center gap-2 text-xs text-[#9ca3af] cursor-pointer">
+                  <input type="checkbox" checked={useRawJson} onChange={(e) => { setUseRawJson(e.target.checked); if (e.target.checked && !rawJsonText) setRawJsonText(jsonString) }} />
+                  Use a fully custom JSON-LD block instead of the generated schema above
+                </label>
+                {useRawJson && (
+                  <>
+                    <textarea
+                      value={rawJsonText}
+                      onChange={(e) => setRawJsonText(e.target.value)}
+                      rows={12}
+                      className="admin-textarea w-full font-mono text-xs"
+                      spellCheck={false}
+                    />
+                    {rawJsonError && <p className="text-red-400 text-xs">{rawJsonError}</p>}
+                  </>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-[#6b7280] leading-relaxed">
+                Custom JSON-LD isn&apos;t available for this page type — its core schema (LocalBusiness/Service/FAQPage)
+                is generated fresh from your live content on every save. Use the override fields above for specific
+                values instead; a full custom block here would go stale the next time you edit this page&apos;s content.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="admin-card overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-[#2a2d3e] flex-wrap">
           <button onClick={() => setShowJson(p => !p)} className="flex items-center gap-2 text-sm font-semibold text-[#e2e8f0]">
             <Code2 className="w-4 h-4 text-blue-400" /> JSON-LD Preview
-            <span className="text-xs text-[#6b7280] font-normal">{graphCount} schema node{graphCount === 1 ? '' : 's'}</span>
+            <span className="text-xs text-[#6b7280] font-normal">
+              {useRawJson ? 'custom JSON-LD' : `${graphCount} schema node${graphCount === 1 ? '' : 's'}`}
+            </span>
           </button>
           <div className="flex gap-2">
             <button onClick={copy} className="admin-btn-secondary text-xs">
               {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               {copied ? 'Copied' : 'Copy'}
             </button>
-            <button onClick={saveSchema} disabled={saving || selected.length === 0} className="admin-btn-primary text-xs">
+            <button onClick={saveSchema} disabled={saving || (selected.length === 0 && !useRawJson)} className="admin-btn-primary text-xs">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save Schema
             </button>
           </div>
         </div>
 
-        {selected.length === 0 ? (
+        {useRawJson ? (
+          <pre className="p-5 text-xs font-mono text-green-400 bg-[#0a0c14] overflow-x-auto leading-relaxed max-h-[520px] whitespace-pre-wrap">
+            {rawJsonText}
+          </pre>
+        ) : selected.length === 0 ? (
           <div className="p-5 text-sm text-amber-400">Select at least one schema type.</div>
         ) : showJson ? (
           <pre className="p-5 text-xs font-mono text-green-400 bg-[#0a0c14] overflow-x-auto leading-relaxed max-h-[520px]">

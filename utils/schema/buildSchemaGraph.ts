@@ -111,7 +111,8 @@ export function buildSchemaGraph(input: SchemaBuildInput) {
         '@id': `${SITE}#localbusiness`,
         name: 'Fiixup',
         url: SITE,
-        telephone: PHONE,
+        telephone: s(overrides.telephone) || PHONE,
+        image: s(overrides.image) || undefined,
         priceRange: '₹₹',
         areaServed: citySlug ? { '@type': 'City', name: titleCaseSlug(citySlug) } : 'Bangalore',
         address: {
@@ -179,9 +180,9 @@ export function buildSchemaGraph(input: SchemaBuildInput) {
       graph.push({
         '@type': type,
         '@id': `${url}#article`,
-        headline: s(overrides.headline) || s(record.meta_title) || name,
+        headline: s(overrides.name) || s(record.meta_title) || name,
         description,
-        image: s(record.og_image_url) || s(record.image_url) || undefined,
+        image: s(overrides.image) || s(record.og_image_url) || s(record.image_url) || undefined,
         datePublished: s(record.date_proper) || s(record.created_at) || undefined,
         dateModified: s(record.updated_at) || undefined,
         author: { '@type': 'Organization', name: 'Fiixup' },
@@ -196,7 +197,7 @@ export function buildSchemaGraph(input: SchemaBuildInput) {
         graph.push({
           '@type': 'HowTo',
           '@id': `${url}#howto`,
-          name: s(overrides.howToName) || name,
+          name: s(overrides.name) || name,
           description,
           totalTime: s(overrides.totalTime) || undefined,
           estimatedCost: s(overrides.estimatedCost)
