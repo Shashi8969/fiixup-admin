@@ -5,7 +5,7 @@
 // client component, never during render or on the server.
 
 import type { Block } from '@/components/posts/editor/types'
-import { sanitizeInlineElement } from '@/utils/posts/sanitizeInlineHtml'
+import { sanitizeInlineElement, sanitizeInlineHtml } from '@/utils/posts/sanitizeInlineHtml'
 
 type NewBlock = { type: string } & Record<string, unknown>
 
@@ -109,9 +109,46 @@ export function htmlToBlocks(rawHtml: string): { blocks: NewBlock[]; skippedImag
   return { blocks, skippedImages }
 }
 
+// ── Minimal inline markdown → HTML ────────────────────────────────────────────
+// Applied only to fields the renderer treats as HTML — paragraph content,
+// list items, table cells (see components/ui/BlockRenderer.tsx: ParagraphBlock/
+// ListBlock/TableBlock all use dangerouslySetInnerHTML). Headings and quotes
+// render as plain text there, so markdown syntax in those stays literal
+// rather than being converted here.
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function mdInlineToHtml(raw: string): string {
+  let out = escapeHtml(raw)
+  out = out.replace(/`([^`]+)`/g, '<code>$1</code>')
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
+  out = out.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_m, a, b) => `<strong>${a ?? b}</strong>`)
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, (_m, pre, inner) => `${pre}<em>${inner}</em>`)
+  out = out.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, (_m, pre, inner) => `${pre}<em>${inner}</em>`)
+  return sanitizeInlineHtml(out)
+}
+
 // ── Plain-text / markdown fallback ────────────────────────────────────────────
 // Used when the clipboard has no HTML payload — some AI tools and terminals
-// only put plain text on the clipboard. Supports common markdown shapes.
+// only put plain text on the clipboard. Supports common markdown shapes:
+// headings, bullet/numbered lists, blockquotes, fenced code, `---`/`***`
+// thematic breaks, GFM-style tables, and inline **bold**/*italic*/`code`/
+// [links](url) within paragraphs, list items and table cells.
+
+function isTableSeparatorRow(line: string): boolean {
+  const cleaned = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  if (!cleaned) return false
+  const cells = cleaned.split('|')
+  return cells.length > 0 && cells.every((c) => /^\s*:?-{2,}:?\s*$/.test(c))
+}
+
+function splitTableRow(line: string): string[] {
+  let s = line.trim()
+  if (s.startsWith('|')) s = s.slice(1)
+  if (s.endsWith('|')) s = s.slice(0, -1)
+  return s.split('|').map((c) => c.trim())
+}
 
 export function textToBlocks(rawText: string): NewBlock[] {
   const lines = rawText.replace(/\r\n/g, '\n').split('\n')
@@ -121,19 +158,38 @@ export function textToBlocks(rawText: string): NewBlock[] {
   let listStyle: 'bullet' | 'numbered' = 'bullet'
   let codeBuf: string[] | null = null
 
-  const flushPara = () => { if (para.length) { blocks.push({ type: 'paragraph', content: para.join(' ').trim() }); para = [] } }
-  const flushList = () => { if (list && list.length) blocks.push({ type: 'list', style: listStyle, items: list }); list = null }
+  const flushPara = () => { if (para.length) { blocks.push({ type: 'paragraph', content: mdInlineToHtml(para.join(' ').trim()) }); para = [] } }
+  const flushList = () => { if (list && list.length) blocks.push({ type: 'list', style: listStyle, items: list.map(mdInlineToHtml) }); list = null }
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
 
     if (line.startsWith('```')) {
       if (codeBuf === null) { flushPara(); flushList(); codeBuf = [] }
       else { blocks.push({ type: 'code', language: '', content: codeBuf.join('\n') }); codeBuf = null }
       continue
     }
-    if (codeBuf !== null) { codeBuf.push(rawLine); continue }
+    if (codeBuf !== null) { codeBuf.push(lines[i]); continue }
     if (line === '') { flushPara(); flushList(); continue }
+
+    // GFM table: a `| a | b |` header row immediately followed by a
+    // `|---|---|` separator row.
+    if (line.includes('|') && i + 1 < lines.length && isTableSeparatorRow(lines[i + 1])) {
+      flushPara(); flushList()
+      const headers = splitTableRow(line).map(mdInlineToHtml)
+      let j = i + 2
+      const rows: string[][] = []
+      while (j < lines.length && lines[j].trim() !== '' && lines[j].includes('|')) {
+        rows.push(splitTableRow(lines[j]).map(mdInlineToHtml))
+        j++
+      }
+      blocks.push({ type: 'table', headers, rows: rows.length ? rows : [headers.map(() => '')] })
+      i = j - 1
+      continue
+    }
+
+    // Thematic break: a line of 3+ identical -, * or _ characters.
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) { flushPara(); flushList(); blocks.push({ type: 'divider' }); continue }
 
     const heading = line.match(/^(#{1,6})\s+(.*)$/)
     if (heading) { flushPara(); flushList(); blocks.push({ type: 'heading', level: heading[1].length, content: heading[2].trim() }); continue }

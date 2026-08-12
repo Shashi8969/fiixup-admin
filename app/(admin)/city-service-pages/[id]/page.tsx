@@ -18,6 +18,11 @@ import { ReviewLibraryPicker, CspRelatedServicePicker } from '@/components/locat
 import { publicSiteUrl } from '@/lib/public-site'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
 import { showToast }        from '@/components/ui/Toast'
+import { BlockEditor }      from '@/components/posts/editor/BlockEditor'
+import { ImportContentModal } from '@/components/posts/editor/ImportContentModal'
+import { LinkOptionsProvider } from '@/components/posts/editor/LinkOptionsContext'
+import type { Block }       from '@/components/posts/editor/types'
+import { toBlocks, stripIds } from '@/utils/posts/blockUtils'
 import {
   saveCityServicePage,
   saveCspPricingRow,   addCspPricingRow,   deleteCspPricingRow,
@@ -26,7 +31,7 @@ import {
 import {
   ArrowLeft, Globe, Layers, Loader2, RefreshCw,
   ExternalLink, Plus, Trash2, Save,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, ClipboardPaste,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
@@ -71,6 +76,9 @@ export default function CspEditorPage() {
   const [related,  setRelated]  = useState<Row[]>([])
   const [tab,      setTab]      = useState<TabId>('seo')
   const [loading,  setLoading]  = useState(true)
+  const [blocks,   setBlocks]   = useState<Block[]>([])
+  const [savingBlocks, setSavingBlocks] = useState(false)
+  const [showImport, setShowImport] = useState(false)
 
   // ── Fetch ALL ──────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -83,6 +91,7 @@ export default function CspEditorPage() {
     if (!data) { setLoading(false); return }
     setCsp(data)
     setCat(data.service_categories as Row ?? null)
+    setBlocks(toBlocks(data.content_blocks))
 
     const [p, t, f, r, sp] = await Promise.all([
       sb.from('csp_pricing_rows')   .select('*').eq('city_service_page_id', cspId).order('sort_order'),
@@ -137,6 +146,17 @@ export default function CspEditorPage() {
     const r = await saveCityServicePage(cspId, citySlug, categorySlug, patch)
     if (r.success) setCsp(p => p ? { ...p, ...patch } : p)
     return r
+  }
+
+  const saveContentBlocks = async (bl: Block[]) => {
+    setSavingBlocks(true)
+    const stripped = stripIds(bl)
+    const r = await saveCityServicePage(cspId, citySlug, categorySlug, { content_blocks: stripped })
+    setSavingBlocks(false)
+    if (!r.success) { showToast('error', r.error); return }
+    setBlocks(bl)
+    setCsp(p => p ? { ...p, content_blocks: stripped } : p)
+    showToast('success', 'Content blocks saved')
   }
 
   const saveJson = (field: string) => async (val: string) => {
@@ -277,6 +297,7 @@ export default function CspEditorPage() {
           record={csp}
           urlPath={`/${citySlug}/services/${categorySlug}`}
           faqs={faqs}
+          blocks={blocks}
           selectedTypes={(Array.isArray(csp.schema_types) ? csp.schema_types : undefined) as SchemaEntityType[] | undefined}
           overrides={(csp.schema_overrides && typeof csp.schema_overrides === 'object' ? csp.schema_overrides : {}) as Record<string, unknown>}
           onSave={savePatch}
@@ -461,17 +482,62 @@ export default function CspEditorPage() {
 
       {/* ════════════ SEO CONTENT ════════════ */}
       {tab === 'seo_content' && (
-        <div className="admin-card p-6 space-y-4">
-          <h2 className="admin-section-title">Long-Form SEO Content</h2>
-          <Field label="SEO Intro Heading" value={s(csp.seo_intro_heading)} onSave={save('seo_intro_heading')} />
-          <Field label="SEO Intro Body"    value={s(csp.seo_intro_body)}    onSave={save('seo_intro_body')} multiline rows={6} />
-          <Field label="SEO Conclusion"    value={s(csp.seo_conclusion)}    onSave={save('seo_conclusion')} multiline rows={4} />
-          <JsonField
-            label="SEO Sections"
-            hint='[{"heading":"...","body":"..."}]'
-            value={csp.seo_sections}
-            onSave={saveJson('seo_sections')}
-          />
+        <div className="space-y-5">
+          <LinkOptionsProvider>
+            <div className="admin-card p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 className="admin-section-title">Content Blocks (recommended)</h2>
+                  <p className="text-xs text-[#6b7280] mt-1">
+                    Same paste/import + block editor as blog posts and location services — paste an
+                    article and it&apos;s auto-converted into blocks below.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowImport(true)} className="admin-btn-secondary text-xs">
+                    <ClipboardPaste className="w-4 h-4" /> Paste / Import Content
+                  </button>
+                  <button onClick={() => saveContentBlocks(blocks)} disabled={savingBlocks} className="admin-btn-primary text-xs">
+                    {savingBlocks ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Save Content Blocks
+                  </button>
+                </div>
+              </div>
+
+              {showImport && (
+                <ImportContentModal
+                  hasExistingBlocks={blocks.length > 0}
+                  onClose={() => setShowImport(false)}
+                  onInsert={(newBlocks, mode) => {
+                    setBlocks(mode === 'replace' ? newBlocks : [...blocks, ...newBlocks])
+                    setShowImport(false)
+                  }}
+                />
+              )}
+
+              <BlockEditor blocks={blocks} onChange={setBlocks} />
+
+              <div className="flex justify-end">
+                <button onClick={() => saveContentBlocks(blocks)} disabled={savingBlocks} className="admin-btn-primary">
+                  {savingBlocks ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Save Content Blocks
+                </button>
+              </div>
+            </div>
+          </LinkOptionsProvider>
+
+          <div className="admin-card p-6 space-y-4">
+            <h2 className="admin-section-title">Legacy Fields (still supported)</h2>
+            <Field label="SEO Intro Heading" value={s(csp.seo_intro_heading)} onSave={save('seo_intro_heading')} />
+            <Field label="SEO Intro Body"    value={s(csp.seo_intro_body)}    onSave={save('seo_intro_body')} multiline rows={6} />
+            <Field label="SEO Conclusion"    value={s(csp.seo_conclusion)}    onSave={save('seo_conclusion')} multiline rows={4} />
+            <JsonField
+              label="SEO Sections"
+              hint='[{"heading":"...","body":"..."}]'
+              value={csp.seo_sections}
+              onSave={saveJson('seo_sections')}
+            />
+          </div>
         </div>
       )}
 
