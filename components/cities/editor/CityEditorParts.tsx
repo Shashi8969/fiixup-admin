@@ -110,16 +110,22 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
 
   return (
     <div className="admin-card overflow-hidden">
-      <button onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1e2133] transition-colors text-left">
-        {expanded ? <ChevronDown className="w-4 h-4 text-[#6b7280] flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-[#6b7280] flex-shrink-0" />}
-        <div className="flex-1 flex items-center gap-3 min-w-0">
+      <div className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1e2133] transition-colors">
+        <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+          {expanded ? <ChevronDown className="w-4 h-4 text-[#6b7280] flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-[#6b7280] flex-shrink-0" />}
           <span className="font-semibold text-[#e2e8f0] text-sm">{form.name}</span>
           <span className="text-xs text-[#6b7280]">/{form.slug}</span>
           {!form.is_active && <span className="text-xs bg-red-500/10 text-red-400 px-2 py-0.5 rounded-full">Inactive</span>}
-        </div>
+        </button>
         <span className="text-xs text-[#6b7280] flex-shrink-0">Sort: {form.sort_order}</span>
-      </button>
+        <Link
+          href={`/areas/${area.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex-shrink-0 whitespace-nowrap"
+        >
+          Open full editor →
+        </Link>
+      </div>
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-[#2a2d3e] pt-4 space-y-3">

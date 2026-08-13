@@ -9,18 +9,18 @@ export type SchemaEntityType =
   | 'HowTo'
   | 'Organization'
 
-export type SchemaPageKind = 'city' | 'service' | 'cityServicePage' | 'locationService' | 'post' | 'globalService'
+export type SchemaPageKind = 'city' | 'area' | 'service' | 'cityServicePage' | 'locationService' | 'post' | 'globalService'
 
 export const SCHEMA_OPTIONS: Record<SchemaEntityType, { label: string; desc: string; bestFor: SchemaPageKind[] }> = {
   WebPage: {
     label: 'WebPage',
-    desc: 'Base page schema for city, service and SEO landing pages.',
-    bestFor: ['city', 'service', 'cityServicePage', 'locationService', 'globalService'],
+    desc: 'Base page schema for city, area, service and SEO landing pages.',
+    bestFor: ['city', 'area', 'service', 'cityServicePage', 'locationService', 'globalService'],
   },
   LocalBusiness: {
     label: 'LocalBusiness',
     desc: 'Fiixup business entity, phone, area served and service location signals.',
-    bestFor: ['city', 'cityServicePage', 'locationService', 'globalService'],
+    bestFor: ['city', 'area', 'cityServicePage', 'locationService', 'globalService'],
   },
   Service: {
     label: 'Service',
@@ -30,12 +30,12 @@ export const SCHEMA_OPTIONS: Record<SchemaEntityType, { label: string; desc: str
   FAQPage: {
     label: 'FAQPage',
     desc: 'Auto-builds FAQ schema from FAQ rows or FAQ blocks.',
-    bestFor: ['city', 'service', 'cityServicePage', 'locationService', 'post', 'globalService'],
+    bestFor: ['city', 'area', 'service', 'cityServicePage', 'locationService', 'post', 'globalService'],
   },
   BreadcrumbList: {
     label: 'BreadcrumbList',
     desc: 'Helps Google understand page hierarchy and internal structure.',
-    bestFor: ['city', 'service', 'cityServicePage', 'locationService', 'post', 'globalService'],
+    bestFor: ['city', 'area', 'service', 'cityServicePage', 'locationService', 'post', 'globalService'],
   },
   Article: {
     label: 'Article',
@@ -61,6 +61,7 @@ export const SCHEMA_OPTIONS: Record<SchemaEntityType, { label: string; desc: str
 
 export const RECOMMENDED_SCHEMA_TYPES: Record<SchemaPageKind, SchemaEntityType[]> = {
   city: ['WebPage', 'LocalBusiness', 'BreadcrumbList', 'Organization', 'FAQPage'],
+  area: ['WebPage', 'LocalBusiness', 'BreadcrumbList', 'FAQPage'],
   service: ['WebPage', 'Service', 'BreadcrumbList', 'FAQPage'],
   cityServicePage: ['WebPage', 'Service', 'LocalBusiness', 'BreadcrumbList', 'FAQPage'],
   locationService: ['WebPage', 'Service', 'LocalBusiness', 'BreadcrumbList', 'FAQPage'],
