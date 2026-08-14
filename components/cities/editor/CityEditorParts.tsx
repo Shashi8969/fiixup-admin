@@ -156,6 +156,9 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Save Area
             </button>
+            <Link href={`/areas/${area.id}`} className="admin-btn-secondary">
+              Edit SEO &amp; Schema →
+            </Link>
             <button onClick={del} className="admin-btn-danger">
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </button>

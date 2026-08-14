@@ -9,18 +9,31 @@ export type SchemaEntityType =
   | 'HowTo'
   | 'Organization'
 
+<<<<<<< HEAD
 export type SchemaPageKind = 'city' | 'area' | 'service' | 'cityServicePage' | 'locationService' | 'post' | 'globalService'
+=======
+export type SchemaPageKind = 'city' | 'service' | 'cityServicePage' | 'locationService' | 'post' | 'globalService' | 'area'
+>>>>>>> 8d8a3a5a41432861e78423d75b97597872fd763b
 
 export const SCHEMA_OPTIONS: Record<SchemaEntityType, { label: string; desc: string; bestFor: SchemaPageKind[] }> = {
   WebPage: {
     label: 'WebPage',
+<<<<<<< HEAD
     desc: 'Base page schema for city, area, service and SEO landing pages.',
     bestFor: ['city', 'area', 'service', 'cityServicePage', 'locationService', 'globalService'],
+=======
+    desc: 'Base page schema for city, service and SEO landing pages.',
+    bestFor: ['city', 'service', 'cityServicePage', 'locationService', 'globalService', 'area'],
+>>>>>>> 8d8a3a5a41432861e78423d75b97597872fd763b
   },
   LocalBusiness: {
     label: 'LocalBusiness',
     desc: 'Fiixup business entity, phone, area served and service location signals.',
+<<<<<<< HEAD
     bestFor: ['city', 'area', 'cityServicePage', 'locationService', 'globalService'],
+=======
+    bestFor: ['city', 'cityServicePage', 'locationService', 'globalService', 'area'],
+>>>>>>> 8d8a3a5a41432861e78423d75b97597872fd763b
   },
   Service: {
     label: 'Service',
@@ -30,12 +43,20 @@ export const SCHEMA_OPTIONS: Record<SchemaEntityType, { label: string; desc: str
   FAQPage: {
     label: 'FAQPage',
     desc: 'Auto-builds FAQ schema from FAQ rows or FAQ blocks.',
+<<<<<<< HEAD
     bestFor: ['city', 'area', 'service', 'cityServicePage', 'locationService', 'post', 'globalService'],
+=======
+    bestFor: ['city', 'service', 'cityServicePage', 'locationService', 'post', 'globalService', 'area'],
+>>>>>>> 8d8a3a5a41432861e78423d75b97597872fd763b
   },
   BreadcrumbList: {
     label: 'BreadcrumbList',
     desc: 'Helps Google understand page hierarchy and internal structure.',
+<<<<<<< HEAD
     bestFor: ['city', 'area', 'service', 'cityServicePage', 'locationService', 'post', 'globalService'],
+=======
+    bestFor: ['city', 'service', 'cityServicePage', 'locationService', 'post', 'globalService', 'area'],
+>>>>>>> 8d8a3a5a41432861e78423d75b97597872fd763b
   },
   Article: {
     label: 'Article',
@@ -49,8 +70,8 @@ export const SCHEMA_OPTIONS: Record<SchemaEntityType, { label: string; desc: str
   },
   HowTo: {
     label: 'HowTo',
-    desc: 'Valid schema.org markup, but Google removed HowTo rich results from Search in 2023 — use only if you want the structured data for non-Google purposes.',
-    bestFor: ['post'],
+    desc: 'Auto-builds from Steps blocks in the content editor. Google removed HowTo rich results from Search in 2023 — use only if you want the structured data for non-Google purposes.',
+    bestFor: ['post', 'locationService', 'cityServicePage', 'area'],
   },
   Organization: {
     label: 'Organization',
@@ -67,4 +88,5 @@ export const RECOMMENDED_SCHEMA_TYPES: Record<SchemaPageKind, SchemaEntityType[]
   locationService: ['WebPage', 'Service', 'LocalBusiness', 'BreadcrumbList', 'FAQPage'],
   post: ['BlogPosting', 'BreadcrumbList', 'FAQPage'],
   globalService: ['Service', 'LocalBusiness', 'BreadcrumbList', 'FAQPage'],
+  area: ['WebPage', 'LocalBusiness', 'BreadcrumbList', 'FAQPage'],
 }
