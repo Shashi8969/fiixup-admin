@@ -11,7 +11,7 @@ import {
   FileText, Package, Layers, LogOut,
   Menu, X, ChevronRight, Globe, Image,
   Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox,
-  Award, Images, Users, Building2,
+  Award, Images, Users, Building2, Car,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -25,6 +25,7 @@ const NAV = [
   { href: '/global-service-pages',icon: Globe,           label: 'Global Pages'      },
   { href: '/posts',               icon: FileText,        label: 'Blog Posts'        },
   { href: '/services',            icon: Package,         label: 'Services'          },
+  { href: '/brands',              icon: Car,             label: 'Brand Pages'       },
   { href: '/media',               icon: Image,           label: 'Media Library'     },
   { href: '/reviews',             icon: Star,            label: 'Review Library'    },
   { href: '/brand-logos',         icon: Award,           label: 'Brand Logos'       },

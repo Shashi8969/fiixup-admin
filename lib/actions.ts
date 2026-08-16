@@ -603,6 +603,24 @@ export async function saveService(
   return { success: true, message: 'Service saved.' }
 }
 
+// ── BRAND PAGES ───────────────────────────────────────────────────────────────
+
+export async function saveBrandPage(
+  brandId: string,
+  brandSlug: string,
+  data: Record<string, unknown>
+): Promise<ActionResult> {
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('brand_pages')
+    .update({ ...sanitizeWriteData(data), updated_at: new Date().toISOString() })
+    .eq('id', brandId)
+
+  if (error) return { success: false, error: error.message }
+  await revalidateMainSite([`/brands/${brandSlug}`, '/brands'])
+  return { success: true, message: 'Brand page saved.' }
+}
+
 type RedirectInput = {
   source: string
   destination: string
