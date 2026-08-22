@@ -638,7 +638,7 @@ export default function LSEditorPage() {
       {tab === 'faqs' && (
         <div className="space-y-4">
           <FaqLibraryPicker
-            locationServiceId={id}
+            target={{ table: 'ls_faqs', idColumn: 'location_service_id', id }}
             serviceSlug={s(ls.service_slug)}
             serviceCategory={s(ls.service_category)}
             citySlug={s(ls.city_slug)}

@@ -9,9 +9,11 @@
 // blank), local insight, SEO content (intro/sections/conclusion/content
 // blocks), related-post curation, schema overrides, meta title/description,
 // and page layout (section order/visibility/heading — areas.page_layout).
-// Testimonials, FAQs and services themselves stay fully live-rolled-up from
-// this area's Location Services entries — not per-area columns, so they
-// have no fields here; edit them on the relevant Location Service instead.
+// Testimonials and FAQs auto-roll-up live from this area's Location Services
+// entries by default, but can be curated on top via the Testimonials/FAQs
+// tabs (area_testimonials/area_faqs) — curated picks show first, then the
+// rollup fills in the rest. Services themselves stay fully rolled-up, no
+// per-area override.
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams }        from 'next/navigation'
@@ -35,10 +37,13 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
+  ChildRow,
   Empty,
+  SectionHeader,
   Toggle,
   s,
 } from '@/components/location-services/editor/LocationServiceEditorParts'
+import { AreaFaqPicker, AreaReviewPicker } from '@/components/location-services/editor/LocationServiceContentPickers'
 import { JsonArrayBuilder } from '@/components/ui/JsonArrayBuilder'
 
 const TABS = [
@@ -47,6 +52,8 @@ const TABS = [
   { id: 'hero',        label: 'Hero'        },
   { id: 'about',       label: 'About'       },
   { id: 'stats_trust',  label: 'Stats & Trust' },
+  { id: 'testimonials', label: 'Testimonials' },
+  { id: 'faqs',        label: 'FAQs'        },
   { id: 'seo_content', label: 'SEO Content' },
   { id: 'schema',      label: 'Schema'      },
   { id: 'layout',      label: 'Page Layout' },
@@ -66,6 +73,8 @@ export default function AreaEditorPage() {
   const [area,      setArea]      = useState<Row | null>(null)
   const [seoPage,   setSeoPage]   = useState<Row | null>(null)
   const [analytics, setAnalytics] = useState<Row | null>(null)
+  const [testimonials, setTestimonials] = useState<Row[]>([])
+  const [faqs,      setFaqs]      = useState<Row[]>([])
   const [blocks,    setBlocks]    = useState<Block[]>([])
   const [savingBlocks, setSavingBlocks] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -88,10 +97,31 @@ export default function AreaEditorPage() {
       setAnalytics(an ?? null)
     }
 
+    const [{ data: testRows }, { data: faqRows }] = await Promise.all([
+      sb.from('area_testimonials').select('*').eq('area_id', id).order('sort_order'),
+      sb.from('area_faqs').select('*').eq('area_id', id).order('sort_order'),
+    ])
+    setTestimonials(testRows ?? [])
+    setFaqs(faqRows ?? [])
+
     setLoading(false)
   }, [id])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  const syncTestimonials = async () => {
+    const { data, error } = await sb.from('area_testimonials')
+      .select('*').eq('area_id', id).order('sort_order')
+    if (error) { showToast('error', error.message); return }
+    setTestimonials(data ?? [])
+  }
+
+  const syncFaqs = async () => {
+    const { data, error } = await sb.from('area_faqs')
+      .select('*').eq('area_id', id).order('sort_order')
+    if (error) { showToast('error', error.message); return }
+    setFaqs(data ?? [])
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -260,8 +290,9 @@ export default function AreaEditorPage() {
           </div>
           <p className="text-xs text-[#6b7280]">
             Stats and trust points default to the city&apos;s (Cities → {s(area.city_slug)}) but can be overridden
-            per area on the Stats &amp; Trust tab. Services, testimonials and FAQs shown on this page are rolled up
-            live from this area&apos;s Location Services entries.
+            per area on the Stats &amp; Trust tab. Services shown on this page are rolled up live from this
+            area&apos;s Location Services entries. Testimonials and FAQs are rolled up the same way by default, but
+            can be curated on top from the Testimonials and FAQs tabs.
           </p>
         </div>
       )}
@@ -319,6 +350,43 @@ export default function AreaEditorPage() {
             value={area.trust_points}
             onSave={saveAreaJson('trust_points')}
           />
+        </div>
+      )}
+
+      {/* ══════════════ TESTIMONIALS ══════════════ */}
+      {tab === 'testimonials' && (
+        <div className="space-y-4">
+          <p className="text-xs text-[#6b7280]">
+            Curated testimonials show first, followed by the auto-rollup from this area&apos;s Location Services
+            entries — this doesn&apos;t replace the rollup, it just lets you pin specific reviews to the top.
+          </p>
+          <AreaReviewPicker areaId={id} existing={testimonials} onRefresh={syncTestimonials} />
+        </div>
+      )}
+
+      {/* ══════════════ FAQs ══════════════ */}
+      {tab === 'faqs' && (
+        <div className="space-y-4">
+          <p className="text-xs text-[#6b7280]">
+            Curated FAQs show first, followed by the auto-rollup from this area&apos;s Location Services entries.
+          </p>
+          <AreaFaqPicker areaId={id} citySlug={s(area.city_slug)} areaSlug={s(area.slug)} existing={faqs} onRefresh={syncFaqs} />
+
+          <SectionHeader title="Area FAQs" count={faqs.length}>
+            <span className="text-xs text-[#6b7280]">Edit or remove added FAQs below</span>
+          </SectionHeader>
+          {faqs.length === 0 && <Empty>No curated FAQs yet. Choose from the library or create a specific FAQ above.</Empty>}
+          {faqs.map(row => (
+            <ChildRow key={s(row.id)} row={row} table="area_faqs"
+              preview={s(row.question).slice(0, 80)}
+              fields={[
+                { key: 'question',   label: 'Question',   type: 'textarea'},
+                { key: 'answer',     label: 'Answer',     type: 'textarea'},
+                { key: 'sort_order', label: 'Sort Order', type: 'number'  },
+              ]}
+              onSave={syncFaqs}
+            />
+          ))}
         </div>
       )}
 

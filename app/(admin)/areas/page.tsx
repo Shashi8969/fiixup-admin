@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import Link                    from 'next/link'
 import { getBrowserClient }    from '@/lib/supabase'
 import { Building2, Search, ArrowRight } from 'lucide-react'
+import { AddAreaButton } from '@/components/cities/editor/CityEditorParts'
 
 export default function AreasPage() {
   const [rows,    setRows]    = useState<Record<string, unknown>[]>([])
@@ -15,20 +16,19 @@ export default function AreasPage() {
 
   const CITIES = ['bangalore', 'mumbai', 'chennai', 'hyderabad']
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      const sb = getBrowserClient()
-      const { data } = await sb
-        .from('areas')
-        .select('id, name, slug, city_slug, is_active, vehicles_serviced, sort_order')
-        .eq('city_slug', city)
-        .order('sort_order')
-      setRows(data ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [city])
+  const load = async () => {
+    setLoading(true)
+    const sb = getBrowserClient()
+    const { data } = await sb
+      .from('areas')
+      .select('id, name, slug, city_slug, is_active, vehicles_serviced, sort_order')
+      .eq('city_slug', city)
+      .order('sort_order')
+    setRows(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [city])
 
   const filtered = rows.filter((r) =>
     !search ||
@@ -38,15 +38,17 @@ export default function AreasPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="admin-page-title flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-purple-400" />
-          Areas
-        </h1>
-        <p className="text-[#94a3b8] text-sm mt-1">
-          Edit hero copy, local insight, SEO content and schema for each area page. New areas are added from a
-          city&apos;s editor (Cities → a city → Areas tab).
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="admin-page-title flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-purple-400" />
+            Areas
+          </h1>
+          <p className="text-[#94a3b8] text-sm mt-1">
+            Edit hero copy, local insight, SEO content and schema for each area page.
+          </p>
+        </div>
+        <AddAreaButton onAdded={(addedCitySlug) => { if (addedCitySlug) setCity(addedCitySlug); load() }} />
       </div>
 
       {/* Filters */}

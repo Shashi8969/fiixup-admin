@@ -369,6 +369,33 @@ export function GlobalReviewPicker({
   )
 }
 
+// Area hub pages: curated testimonials sit additively alongside the existing
+// auto-rollup from the area's location_services children (see
+// fn_build_area_seo_page) rather than replacing it.
+export function AreaReviewPicker({
+  areaId,
+  existing,
+  onRefresh,
+}: {
+  areaId: string
+  existing: Row[]
+  onRefresh: () => void
+}) {
+  return (
+    <ReviewLibraryPicker
+      target={{
+        table: 'area_testimonials',
+        idColumn: 'area_id',
+        id: areaId,
+        locationField: 'area',
+        scopeLabel: 'area',
+      }}
+      existing={existing}
+      onRefresh={onRefresh}
+    />
+  )
+}
+
 // Homepage: unlike the other scopes, selection isn't written straight to the
 // DB — it's held in the homepage editor's local page_data state and only
 // persists when the admin clicks "Save Homepage", same as every other
@@ -506,20 +533,31 @@ export function HomepageTestimonialPicker({
 
 type FaqScope = 'recommended' | 'all' | 'global' | 'service' | 'area'
 
+export type FaqTargetConfig = {
+  /** Table this scope's FAQs live in, e.g. ls_faqs, area_faqs */
+  table: string
+  /** FK column on that table pointing back to the scope, e.g. location_service_id, area_id */
+  idColumn: string
+  id: string
+}
+
+// Shared by every "pick a reusable FAQ instead of typing a new one" surface —
+// location-services and areas both read from the same faq_library and just
+// insert into a different target table (mirrors ReviewLibraryPicker's pattern).
 export function FaqLibraryPicker({
-  locationServiceId,
-  serviceSlug,
-  serviceCategory,
-  citySlug,
-  areaSlug,
+  target,
+  serviceSlug = '',
+  serviceCategory = '',
+  citySlug = '',
+  areaSlug = '',
   existing,
   onRefresh,
 }: {
-  locationServiceId: string
-  serviceSlug: string
-  serviceCategory: string
-  citySlug: string
-  areaSlug: string
+  target: FaqTargetConfig
+  serviceSlug?: string
+  serviceCategory?: string
+  citySlug?: string
+  areaSlug?: string
   existing: Row[]
   onRefresh: () => void
 }) {
@@ -617,8 +655,8 @@ export function FaqLibraryPicker({
     }
 
     setSavingId(faqId)
-    const { error } = await sb.from('ls_faqs').insert({
-      location_service_id: locationServiceId,
+    const { error } = await sb.from(target.table).insert({
+      [target.idColumn]: target.id,
       question: faqQuestion,
       answer: faqAnswer,
       sort_order: existing.length + 1,
@@ -646,8 +684,8 @@ export function FaqLibraryPicker({
     }
 
     setCreating(true)
-    const { error } = await sb.from('ls_faqs').insert({
-      location_service_id: locationServiceId,
+    const { error } = await sb.from(target.table).insert({
+      [target.idColumn]: target.id,
       question: cleanQuestion,
       answer: cleanAnswer,
       sort_order: existing.length + 1,
@@ -767,6 +805,32 @@ export function FaqLibraryPicker({
         </div>
       )}
     </div>
+  )
+}
+
+// Area hub pages: curated FAQs sit additively alongside the existing
+// auto-rollup from the area's location_services children.
+export function AreaFaqPicker({
+  areaId,
+  citySlug,
+  areaSlug,
+  existing,
+  onRefresh,
+}: {
+  areaId: string
+  citySlug: string
+  areaSlug: string
+  existing: Row[]
+  onRefresh: () => void
+}) {
+  return (
+    <FaqLibraryPicker
+      target={{ table: 'area_faqs', idColumn: 'area_id', id: areaId }}
+      citySlug={citySlug}
+      areaSlug={areaSlug}
+      existing={existing}
+      onRefresh={onRefresh}
+    />
   )
 }
 

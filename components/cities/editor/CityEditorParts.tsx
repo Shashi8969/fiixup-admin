@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { showToast } from '@/components/ui/Toast'
@@ -170,31 +170,50 @@ export function AreaRow({ area, onSave }: { area: Area; onSave: () => void }) {
 }
 
 // ── Add Area button ────────────────────────────────────────────────────────────
-export function AddAreaButton({ cityId, citySlug, onAdded }: { cityId: string; citySlug: string; onAdded: () => void }) {
+// When cityId/citySlug are omitted (used from the top-level Areas list page),
+// a city picker is shown so an area can be created without going through a
+// city's own editor first.
+export function AddAreaButton({ cityId, citySlug, onAdded }: { cityId?: string; citySlug?: string; onAdded: (addedCitySlug?: string) => void }) {
   const sb = getBrowserClient()
+  const needsCityPicker = !cityId
   const [open, setOpen]   = useState(false)
-  const [form, setForm]   = useState({ name: '', slug: '', highlight: '', sort_order: '0', vehicles_serviced: '0' })
+  const [cities, setCities] = useState<{ id: string; slug: string; name: string }[]>([])
+  const [selectedCityId, setSelectedCityId] = useState('')
+  const [form, setForm]   = useState({
+    name: '', slug: '', highlight: '', sort_order: '0', vehicles_serviced: '0', latitude: '', longitude: '',
+  })
   const [busy, setBusy]   = useState(false)
 
+  useEffect(() => {
+    if (!needsCityPicker || !open || cities.length) return
+    sb.from('cities').select('id, slug, name').order('name').then(({ data }) => setCities(data ?? []))
+  }, [open])
+
   const add = async () => {
+    const resolvedCityId   = cityId ?? selectedCityId
+    const resolvedCitySlug = citySlug ?? cities.find(c => c.id === selectedCityId)?.slug ?? ''
+    if (!resolvedCityId || !resolvedCitySlug) { showToast('error', 'Select a city'); return }
     if (!form.name || !form.slug) { showToast('error', 'Name and slug required'); return }
     setBusy(true)
     const { error } = await sb.from('areas').insert({
-      city_id:    cityId,
-      city_slug:  citySlug,
+      city_id:    resolvedCityId,
+      city_slug:  resolvedCitySlug,
       name:       form.name,
       slug:       form.slug,
       highlight:  form.highlight,
       sort_order: parseInt(form.sort_order) || 0,
       vehicles_serviced: parseInt(form.vehicles_serviced) || 0,
+      latitude:   form.latitude  ? parseFloat(form.latitude)  : null,
+      longitude:  form.longitude ? parseFloat(form.longitude) : null,
       is_active:  true,
     })
     setBusy(false)
     if (error) { showToast('error', error.message); return }
     showToast('success', 'Area added')
-    setForm({ name: '', slug: '', highlight: '', sort_order: '0', vehicles_serviced: '0' })
+    setForm({ name: '', slug: '', highlight: '', sort_order: '0', vehicles_serviced: '0', latitude: '', longitude: '' })
+    setSelectedCityId('')
     setOpen(false)
-    onAdded()
+    onAdded(resolvedCitySlug)
   }
 
   return (
@@ -204,12 +223,25 @@ export function AddAreaButton({ cityId, citySlug, onAdded }: { cityId: string; c
       </button>
       {open && (
         <div className="admin-card p-4 mt-3 space-y-3 border-dashed">
+          {needsCityPicker && (
+            <div>
+              <label className="admin-label">City *</label>
+              <select value={selectedCityId} onChange={e => setSelectedCityId(e.target.value)} className="admin-input">
+                <option value="">Select a city…</option>
+                {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Inp label="Name *"  value={form.name}  onChange={v => setForm(p=>({...p,name:v}))} placeholder="Koramangala" />
             <Inp label="Slug *"  value={form.slug}  onChange={v => setForm(p=>({...p,slug:v}))} placeholder="koramangala" />
           </div>
           <Inp label="Highlight" value={form.highlight} onChange={v => setForm(p=>({...p,highlight:v}))} placeholder="IT Hub" />
-          <Inp label="Vehicles Serviced" value={form.vehicles_serviced} onChange={v => setForm(p=>({...p,vehicles_serviced:v}))} placeholder="0" />
+          <div className="grid grid-cols-3 gap-3">
+            <Inp label="Vehicles Serviced" value={form.vehicles_serviced} onChange={v => setForm(p=>({...p,vehicles_serviced:v}))} placeholder="0" />
+            <Inp label="Latitude"  value={form.latitude}  onChange={v => setForm(p=>({...p,latitude:v}))}  placeholder="12.9352" />
+            <Inp label="Longitude" value={form.longitude} onChange={v => setForm(p=>({...p,longitude:v}))} placeholder="77.6146" />
+          </div>
           <Inp label="Sort Order" value={form.sort_order} onChange={v => setForm(p=>({...p,sort_order:v}))} />
           <button onClick={add} disabled={busy} className="admin-btn-primary">
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}

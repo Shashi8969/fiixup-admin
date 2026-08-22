@@ -896,6 +896,10 @@ export async function revalidateFaqLibrary(): Promise<ActionResult> {
   return revalidateMainSiteTag('faq-library')
 }
 
+export async function revalidateCtaSettings(): Promise<ActionResult> {
+  return revalidateMainSiteTag('cta-settings')
+}
+
 export async function revalidateReviewSources(): Promise<ActionResult> {
   return revalidateMainSiteTag('reviews')
 }
