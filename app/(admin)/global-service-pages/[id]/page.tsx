@@ -26,9 +26,10 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import {
-  AddRowBtn, ChildRow, Empty, JsonField, SectionHeader, Toggle, s,
+  AddRowBtn, ChildRow, Empty, SectionHeader, Toggle, s,
   DirectAddBtn, DirectChildRow,
 } from '@/components/city-service-pages/editor/CityServicePageEditorParts'
+import { JsonArrayBuilder } from '@/components/ui/JsonArrayBuilder'
 
 const TABS = [
   { id: 'seo',          label: 'SEO'          },
@@ -271,14 +272,29 @@ export default function GlobalServicePageEditor() {
             </p>
           </div>
           {[
-            { field: 'about_bullets',      label: 'About Bullets',      hint: '[{"heading":"...","text":"..."}]'              },
-            { field: 'service_highlights', label: 'Service Highlights', hint: '[{"title":"...","description":"..."}]'         },
-            { field: 'why_choose_points',  label: 'Why Choose Points',  hint: '[{"icon":"Shield","title":"...","desc":"..."}]' },
-            { field: 'process_steps',      label: 'Process Steps',      hint: '[{"step":1,"title":"...","desc":"..."}]'       },
-            { field: 'hero_stats',         label: 'Hero Stats',         hint: '[{"value":"...","label":"..."}]'               },
-          ].map(({ field, label, hint }) => (
+            {
+              field: 'about_bullets', label: 'About Bullets', itemNoun: 'bullet',
+              fields: [{ key: 'heading', label: 'Heading' }, { key: 'text', label: 'Text', type: 'textarea' as const }],
+            },
+            {
+              field: 'service_highlights', label: 'Service Highlights', itemNoun: 'highlight',
+              fields: [{ key: 'title', label: 'Title' }, { key: 'description', label: 'Description', type: 'textarea' as const }],
+            },
+            {
+              field: 'why_choose_points', label: 'Why Choose Points', itemNoun: 'point',
+              fields: [{ key: 'icon', label: 'Icon (lucide name)' }, { key: 'title', label: 'Title' }, { key: 'desc', label: 'Description', type: 'textarea' as const }],
+            },
+            {
+              field: 'process_steps', label: 'Process Steps', itemNoun: 'step',
+              fields: [{ key: 'step', label: 'Step Number/Label' }, { key: 'title', label: 'Title' }, { key: 'desc', label: 'Description', type: 'textarea' as const }],
+            },
+            {
+              field: 'hero_stats', label: 'Hero Stats', itemNoun: 'stat',
+              fields: [{ key: 'value', label: 'Value (e.g. 10,000+)' }, { key: 'label', label: 'Label' }],
+            },
+          ].map(({ field, label, itemNoun, fields }) => (
             <div key={field} className="admin-card p-5">
-              <JsonField label={label} hint={hint} value={gsp[field]} onSave={saveJson(field)} />
+              <JsonArrayBuilder label={label} itemNoun={itemNoun} fields={fields} value={gsp[field]} onSave={saveJson(field)} />
             </div>
           ))}
         </div>
@@ -432,7 +448,11 @@ export default function GlobalServicePageEditor() {
           <Field label="SEO Intro Heading" value={s(gsp.seo_intro_heading)} onSave={save('seo_intro_heading')} />
           <Field label="SEO Intro Body"    value={s(gsp.seo_intro_body)}    onSave={save('seo_intro_body')} multiline rows={6} />
           <Field label="SEO Conclusion"    value={s(gsp.seo_conclusion)}    onSave={save('seo_conclusion')} multiline rows={4} />
-          <JsonField label="SEO Sections" hint='[{"heading":"...","body":"..."}]' value={gsp.seo_sections} onSave={saveJson('seo_sections')} />
+          <JsonArrayBuilder
+            label="SEO Sections" itemNoun="section"
+            fields={[{ key: 'heading', label: 'Heading' }, { key: 'body', label: 'Body', type: 'textarea' }]}
+            value={gsp.seo_sections} onSave={saveJson('seo_sections')}
+          />
         </div>
       )}
     </div>

@@ -36,10 +36,10 @@ import {
 import { clsx } from 'clsx'
 import {
   Empty,
-  JsonField,
   Toggle,
   s,
 } from '@/components/location-services/editor/LocationServiceEditorParts'
+import { JsonArrayBuilder } from '@/components/ui/JsonArrayBuilder'
 
 const TABS = [
   { id: 'seo',         label: 'SEO'         },
@@ -313,9 +313,9 @@ export default function AreaEditorPage() {
             <Field label="Satisfaction (e.g. 98%)"    value={s(area.stats_satisfaction)} onSave={saveArea('stats_satisfaction')} />
             <Field label="Coverage (e.g. Full Area)"  value={s(area.stats_coverage)}     onSave={saveArea('stats_coverage')} />
           </div>
-          <JsonField
+          <JsonArrayBuilder
             key={JSON.stringify(area.trust_points)}
-            label='Trust Points ["point 1", "point 2", ...]'
+            label="Trust Points" itemNoun="point"
             value={area.trust_points}
             onSave={saveAreaJson('trust_points')}
           />
@@ -373,9 +373,10 @@ export default function AreaEditorPage() {
             <Field label="SEO Intro Heading" value={s(area.seo_intro_heading)} onSave={saveArea('seo_intro_heading')} />
             <Field label="SEO Intro Body"    value={s(area.seo_intro_body)}    onSave={saveArea('seo_intro_body')} multiline rows={6} />
             <Field label="SEO Conclusion"    value={s(area.seo_conclusion)}    onSave={saveArea('seo_conclusion')} multiline rows={4} />
-            <JsonField
+            <JsonArrayBuilder
               key={JSON.stringify(area.seo_sections)}
-              label="SEO Sections [{heading, body}]"
+              label="SEO Sections" itemNoun="section"
+              fields={[{ key: 'heading', label: 'Heading' }, { key: 'body', label: 'Body', type: 'textarea' }]}
               value={area.seo_sections}
               onSave={saveAreaJson('seo_sections')}
             />
@@ -387,9 +388,10 @@ export default function AreaEditorPage() {
               Manually curate which blog posts show in this area&apos;s "Helpful Guides" section. Leave empty to keep
               auto-matching posts by title/tag against this area and city name.
             </p>
-            <JsonField
+            <JsonArrayBuilder
               key={JSON.stringify(area.related_posts)}
-              label='Related Posts [{slug, title, category}]'
+              label="Related Posts" itemNoun="post"
+              fields={[{ key: 'slug', label: 'Slug' }, { key: 'title', label: 'Title' }, { key: 'category', label: 'Category' }]}
               value={area.related_posts}
               onSave={saveAreaJson('related_posts')}
             />

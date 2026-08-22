@@ -31,10 +31,10 @@ import {
   CSPCard,
   EditableRow,
   Empty,
-  JsonField,
   SectionTitle,
   s,
 } from '@/components/cities/editor/CityEditorParts'
+import { JsonArrayBuilder } from '@/components/ui/JsonArrayBuilder'
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 const TABS = [
@@ -263,9 +263,13 @@ export default function CityEditorPage() {
             label="Hero Image URL" value={s(city.hero_image_url)} onSave={saveField('hero_image_url')}
             altLabel="Hero Image Alt" altValue={s(city.hero_image_alt)} onSaveAlt={saveField('hero_image_alt')}
           />
-          <JsonField label="Hero Bullets (JSON array of strings)" value={city.hero_bullets} onSave={saveJson('hero_bullets')} />
-          <JsonField label="Hero Stats (JSON array [{value,label}])" value={city.hero_stats} onSave={saveJson('hero_stats')} />
-          <JsonField label="Trust Points (JSON array of strings)"   value={city.trust_points} onSave={saveJson('trust_points')} />
+          <JsonArrayBuilder label="Hero Bullets" itemNoun="bullet" value={city.hero_bullets} onSave={saveJson('hero_bullets')} />
+          <JsonArrayBuilder
+            label="Hero Stats" itemNoun="stat"
+            fields={[{ key: 'value', label: 'Value (e.g. 10,000+)' }, { key: 'label', label: 'Label' }]}
+            value={city.hero_stats} onSave={saveJson('hero_stats')}
+          />
+          <JsonArrayBuilder label="Trust Points" itemNoun="point" value={city.trust_points} onSave={saveJson('trust_points')} />
         </div>
       )}
 
@@ -280,7 +284,11 @@ export default function CityEditorPage() {
             label="About Image URL" value={s(city.about_image_url)} onSave={saveField('about_image_url')}
             altLabel="About Image Alt" altValue={s(city.about_image_alt)} onSaveAlt={saveField('about_image_alt')}
           />
-          <JsonField label="About Bullets (JSON)" value={city.about_bullets} onSave={saveJson('about_bullets')} />
+          <JsonArrayBuilder
+            label="About Bullets" itemNoun="bullet"
+            fields={[{ key: 'heading', label: 'Heading' }, { key: 'text', label: 'Text', type: 'textarea' }]}
+            value={city.about_bullets} onSave={saveJson('about_bullets')}
+          />
           <Field label="Services Section Heading"  value={s(city.services_section_heading)}  onSave={saveField('services_section_heading')} />
           <Field label="Services Section Subtext"  value={s(city.services_section_subtext)}  onSave={saveField('services_section_subtext')} multiline rows={2} />
           <div className="grid grid-cols-2 gap-4">
@@ -423,8 +431,8 @@ export default function CityEditorPage() {
           <Field label="Address Line 1" value={s(city.address_line1)} onSave={saveField('address_line1')} />
           <Field label="Address Line 2" value={s(city.address_line2)} onSave={saveField('address_line2')} />
           <Field label="Map Embed URL"  value={s(city.map_embed_url)} onSave={saveField('map_embed_url')} multiline rows={3} />
-          <JsonField
-            label="Related Post Slugs (JSON array of strings)"
+          <JsonArrayBuilder
+            label="Related Post Slugs" itemNoun="slug"
             value={city.related_post_slugs}
             onSave={saveJson('related_post_slugs')}
           />

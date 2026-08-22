@@ -119,13 +119,13 @@ export function ChildRow({ row, table, preview, fields, onSave }: {
 // ── Add button (generic for any child table) ───────────────────────────────────
 export function AddBtn({ table, parentKey, parentId, fields, onAdded }: {
   table: string; parentKey: string; parentId: string
-  fields: { key: string; label: string; type: 'text' | 'textarea' | 'number'; required?: boolean }[]
+  fields: { key: string; label: string; type: 'text' | 'textarea' | 'number' | 'boolean'; required?: boolean }[]
   onAdded: () => void
 }) {
   const sb = getBrowserClient()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState<Record<string, string>>(
-    Object.fromEntries(fields.map(f => [f.key, '']))
+    Object.fromEntries(fields.map(f => [f.key, f.type === 'boolean' ? 'false' : '']))
   )
   const [busy, setBusy] = useState(false)
 
@@ -135,6 +135,7 @@ export function AddBtn({ table, parentKey, parentId, fields, onAdded }: {
     setBusy(true)
     const payload: Record<string, unknown> = { [parentKey]: parentKey === 'ls_id' ? parseInt(parentId) : parentId }
     fields.forEach(f => {
+      if (f.type === 'boolean') { payload[f.key] = form[f.key] === 'true'; return }
       if (!form[f.key] && !f.required) return
       payload[f.key] = f.type === 'number' ? (parseFloat(form[f.key]) || 0) : form[f.key]
     })
@@ -161,6 +162,15 @@ export function AddBtn({ table, parentKey, parentId, fields, onAdded }: {
                 <label className="admin-label">{f.label}{f.required && ' *'}</label>
                 <textarea value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
                   rows={3} className="admin-textarea" />
+              </div>
+            ) : f.type === 'boolean' ? (
+              <div key={f.key} className="flex items-center gap-3">
+                <span className="admin-label mb-0">{f.label}</span>
+                <Toggle
+                  value={form[f.key] === 'true'}
+                  onChange={v => setForm(p => ({ ...p, [f.key]: String(v) }))}
+                  label=""
+                />
               </div>
             ) : (
               <div key={f.key}>

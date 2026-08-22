@@ -34,11 +34,11 @@ import {
   ChevronDown, ChevronRight, ClipboardPaste,
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import { JsonArrayBuilder } from '@/components/ui/JsonArrayBuilder'
 import {
   AddRowBtn,
   ChildRow,
   Empty,
-  JsonField,
   SectionHeader,
   Toggle,
   s,
@@ -338,15 +338,28 @@ export default function CspEditorPage() {
             </p>
           </div>
           {[
-            { field: 'about_bullets',      label: 'About Bullets',         hint: '[{"heading":"...","text":"..."}]'              },
-            { field: 'service_highlights', label: 'Service Highlights',    hint: '[{"title":"...","description":"..."}]'         },
-            { field: 'why_choose_points',  label: 'Why Choose Points',     hint: '[{"icon":"Shield","title":"...","desc":"..."}]' },
-            { field: 'process_steps',      label: 'Process Steps',         hint: '[{"step":1,"title":"...","desc":"..."}]'       },
-          ].map(({ field, label, hint }) => (
+            {
+              field: 'about_bullets', label: 'About Bullets', itemNoun: 'bullet',
+              fields: [{ key: 'heading', label: 'Heading' }, { key: 'text', label: 'Text', type: 'textarea' as const }],
+            },
+            {
+              field: 'service_highlights', label: 'Service Highlights', itemNoun: 'highlight',
+              fields: [{ key: 'title', label: 'Title' }, { key: 'description', label: 'Description', type: 'textarea' as const }],
+            },
+            {
+              field: 'why_choose_points', label: 'Why Choose Points', itemNoun: 'point',
+              fields: [{ key: 'icon', label: 'Icon (lucide name)' }, { key: 'title', label: 'Title' }, { key: 'desc', label: 'Description', type: 'textarea' as const }],
+            },
+            {
+              field: 'process_steps', label: 'Process Steps', itemNoun: 'step',
+              fields: [{ key: 'step', label: 'Step Number/Label' }, { key: 'title', label: 'Title' }, { key: 'desc', label: 'Description', type: 'textarea' as const }],
+            },
+          ].map(({ field, label, itemNoun, fields }) => (
             <div key={field} className="admin-card p-5">
-              <JsonField
-                label={`${label}`}
-                hint={hint}
+              <JsonArrayBuilder
+                label={label}
+                itemNoun={itemNoun}
+                fields={fields}
                 value={csp[field]}
                 onSave={saveJson(field)}
               />
@@ -531,9 +544,9 @@ export default function CspEditorPage() {
             <Field label="SEO Intro Heading" value={s(csp.seo_intro_heading)} onSave={save('seo_intro_heading')} />
             <Field label="SEO Intro Body"    value={s(csp.seo_intro_body)}    onSave={save('seo_intro_body')} multiline rows={6} />
             <Field label="SEO Conclusion"    value={s(csp.seo_conclusion)}    onSave={save('seo_conclusion')} multiline rows={4} />
-            <JsonField
-              label="SEO Sections"
-              hint='[{"heading":"...","body":"..."}]'
+            <JsonArrayBuilder
+              label="SEO Sections" itemNoun="section"
+              fields={[{ key: 'heading', label: 'Heading' }, { key: 'body', label: 'Body', type: 'textarea' }]}
               value={csp.seo_sections}
               onSave={saveJson('seo_sections')}
             />
