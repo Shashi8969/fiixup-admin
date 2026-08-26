@@ -37,6 +37,37 @@ export type MediaItem = {
   created_at:      string
 }
 
+// Snapshot of a MediaItem's display/SEO fields, copied onto a page record's
+// `<slot>_image_meta` jsonb column when that image is picked for that slot.
+// Shape must match the `<slot>_image_meta` columns added to cities, areas,
+// global_service_pages, location_services, services, posts, brand_pages —
+// see fiixup_nextjs's SEO_AUDIT-adjacent image-SEO migration.
+export type ImageMeta = {
+  media_id:   string
+  title:      string | null
+  caption:    string | null
+  focal_x:    number
+  focal_y:    number
+  crop_mode:  string
+  crop_ratio: string
+  width:      number | null
+  height:     number | null
+}
+
+export function toImageMeta(item: Pick<MediaItem, 'id' | 'title' | 'caption' | 'focal_x' | 'focal_y' | 'crop_mode' | 'crop_ratio' | 'width' | 'height'>): ImageMeta {
+  return {
+    media_id:   item.id,
+    title:      item.title ?? null,
+    caption:    item.caption ?? null,
+    focal_x:    item.focal_x ?? 50,
+    focal_y:    item.focal_y ?? 50,
+    crop_mode:  item.crop_mode ?? 'contain',
+    crop_ratio: item.crop_ratio ?? 'auto',
+    width:      item.width ?? null,
+    height:     item.height ?? null,
+  }
+}
+
 export type UploadForm = {
   title: string
   alt_text: string

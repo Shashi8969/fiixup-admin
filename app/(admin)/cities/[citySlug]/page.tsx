@@ -9,6 +9,7 @@ import { useParams }     from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }         from '@/components/ui/Field'
 import { ImagePickerField } from '@/components/media/ImagePickerField'
+import type { ImageMeta } from '@/components/media/types'
 import { SeoMetaPanel }  from '@/components/seo/SeoMetaPanel'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
@@ -133,6 +134,7 @@ export default function CityEditorPage() {
     try { return await saveCity(col, JSON.parse(val)) }
     catch { showToast('error', 'Invalid JSON'); return { success: false, error: 'Invalid JSON' } }
   }
+  const saveMeta  = (col: string) => async (meta: ImageMeta) => saveCity(col, meta)
 
   const saveCityPatch = async (patch: Record<string, unknown>) => {
     setSaving(true)
@@ -262,6 +264,7 @@ export default function CityEditorPage() {
           <ImagePickerField
             label="Hero Image URL" value={s(city.hero_image_url)} onSave={saveField('hero_image_url')}
             altLabel="Hero Image Alt" altValue={s(city.hero_image_alt)} onSaveAlt={saveField('hero_image_alt')}
+            onSaveMeta={saveMeta('hero_image_meta')}
           />
           <JsonArrayBuilder label="Hero Bullets" itemNoun="bullet" value={city.hero_bullets} onSave={saveJson('hero_bullets')} />
           <JsonArrayBuilder
@@ -283,6 +286,7 @@ export default function CityEditorPage() {
           <ImagePickerField
             label="About Image URL" value={s(city.about_image_url)} onSave={saveField('about_image_url')}
             altLabel="About Image Alt" altValue={s(city.about_image_alt)} onSaveAlt={saveField('about_image_alt')}
+            onSaveMeta={saveMeta('about_image_meta')}
           />
           <JsonArrayBuilder
             label="About Bullets" itemNoun="bullet"

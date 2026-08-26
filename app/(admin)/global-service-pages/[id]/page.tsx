@@ -245,6 +245,7 @@ export default function GlobalServicePageEditor() {
           <ImagePickerField
             label="Hero Image URL" value={s(gsp.hero_image_url)} onSave={save('hero_image_url')}
             altLabel="Hero Image Alt" altValue={s(gsp.hero_image_alt)} onSaveAlt={save('hero_image_alt')}
+            onSaveMeta={save('hero_image_meta')}
           />
         </div>
       )}

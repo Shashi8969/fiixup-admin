@@ -210,6 +210,7 @@ export default function ServiceEditorPage() {
           <ImagePickerField
             label="Image URL" value={String(svc.image_url ?? '')} onSave={save('image_url')}
             altLabel="Image Alt" altValue={String(svc.image_alt ?? '')} onSaveAlt={save('image_alt')}
+            onSaveMeta={save('image_meta')}
           />
         </div>
       )}

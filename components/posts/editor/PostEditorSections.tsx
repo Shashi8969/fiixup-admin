@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import { ArrowLeft, ClipboardPaste, ExternalLink, FileText, Loader2, RefreshCw } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
+import { ImagePickerField } from '@/components/media/ImagePickerField'
 import { AdminBackButton } from '@/components/navigation/AdminBackButton'
 import { BlockEditor } from '@/components/posts/editor/BlockEditor'
 import { ImportContentModal } from '@/components/posts/editor/ImportContentModal'
@@ -117,8 +118,11 @@ export function SeoTab({ post, postSlug, save }: {
 
       <div className="admin-card p-5 space-y-4">
         <h2 className="admin-section-title">Cover / OG Image</h2>
-        <Field label="Image URL"      value={String(post.image     ?? '')} onSave={save('image')} />
-        <Field label="Image Alt Text" value={String(post.image_alt ?? '')} onSave={save('image_alt')} />
+        <ImagePickerField
+          label="Image URL" value={String(post.image ?? '')} onSave={save('image')}
+          altLabel="Image Alt Text" altValue={String(post.image_alt ?? '')} onSaveAlt={save('image_alt')}
+          onSaveMeta={save('image_meta')}
+        />
         {String(post.image ?? '') && (
           <div className="rounded-xl overflow-hidden border border-[#2a2d3e] bg-[#0f1117]">
             <img src={String(post.image)} alt="OG preview" className="max-h-48 w-full object-cover" />

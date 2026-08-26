@@ -472,6 +472,7 @@ export default function LSEditorPage() {
           <ImagePickerField
             label="Hero Image URL" value={s(ls.hero_image_url)} onSave={saveLS('hero_image_url')}
             altLabel="Hero Image Alt" altValue={s(ls.hero_image_alt)} onSaveAlt={saveLS('hero_image_alt')}
+            onSaveMeta={saveLS('hero_image_meta')}
           />
         </div>
       )}

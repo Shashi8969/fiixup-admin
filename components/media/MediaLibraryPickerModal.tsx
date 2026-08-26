@@ -6,7 +6,10 @@ import { Check, Loader2, Search, X } from 'lucide-react'
 import { getBrowserClient } from '@/lib/supabase'
 import { FOLDERS, type MediaItem } from '@/components/media/types'
 
-export type PickedMedia = Pick<MediaItem, 'id' | 'public_url' | 'file_name' | 'title' | 'alt_text' | 'caption' | 'folder'>
+export type PickedMedia = Pick<MediaItem,
+  | 'id' | 'public_url' | 'file_name' | 'title' | 'alt_text' | 'caption' | 'folder'
+  | 'crop_mode' | 'crop_ratio' | 'focal_x' | 'focal_y' | 'width' | 'height'
+>
 
 // Generic "browse the Media Library and pick one image" modal — reusable
 // across editors (unlike components/location-services/editor/ImagePickerTab.tsx,
@@ -25,7 +28,7 @@ export function MediaLibraryPickerModal({ onSelect, onClose }: {
     let cancelled = false
     const sb = getBrowserClient()
     setLoading(true)
-    let q = sb.from('media_library').select('id,public_url,file_name,title,alt_text,caption,folder').order('created_at', { ascending: false })
+    let q = sb.from('media_library').select('id,public_url,file_name,title,alt_text,caption,folder,crop_mode,crop_ratio,focal_x,focal_y,width,height').order('created_at', { ascending: false })
     if (folder !== 'all') q = q.eq('folder', folder)
     q.then(({ data }) => {
       if (!cancelled) { setItems((data ?? []) as PickedMedia[]); setLoading(false) }

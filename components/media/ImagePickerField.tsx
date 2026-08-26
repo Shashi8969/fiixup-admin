@@ -11,6 +11,7 @@ import { Image as ImageIcon } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
 import type { ActionResult } from '@/lib/actions'
 import { MediaLibraryPickerModal, type PickedMedia } from '@/components/media/MediaLibraryPickerModal'
+import { toImageMeta, type ImageMeta } from '@/components/media/types'
 
 export function ImagePickerField({
   label,
@@ -19,6 +20,7 @@ export function ImagePickerField({
   altLabel,
   altValue,
   onSaveAlt,
+  onSaveMeta,
 }: {
   label: string
   value: string
@@ -26,14 +28,23 @@ export function ImagePickerField({
   altLabel?: string
   altValue?: string
   onSaveAlt?: (val: string) => Promise<ActionResult>
+  /** Persists the picked image's full SEO snapshot (title, caption, focal
+   *  point, crop) to this placement's `<slot>_image_meta` column — pass
+   *  whenever that column exists on the destination table. Complete Image
+   *  SEO: picking an image should apply everything about it, not just alt
+   *  text, so this always overwrites (a new image means new metadata). */
+  onSaveMeta?: (meta: ImageMeta) => Promise<ActionResult>
 }) {
   const [showPicker, setShowPicker] = useState(false)
 
   const handlePick = async (item: PickedMedia) => {
     setShowPicker(false)
     await onSave(item.public_url)
-    if (onSaveAlt && !String(altValue ?? '').trim()) {
+    if (onSaveAlt) {
       await onSaveAlt(item.alt_text || item.title || '')
+    }
+    if (onSaveMeta) {
+      await onSaveMeta(toImageMeta(item))
     }
   }
 

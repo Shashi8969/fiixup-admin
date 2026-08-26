@@ -19,6 +19,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams }        from 'next/navigation'
 import { getBrowserClient } from '@/lib/supabase'
 import { Field }            from '@/components/ui/Field'
+import { ImagePickerField } from '@/components/media/ImagePickerField'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { SeoMetaPanel }     from '@/components/seo/SeoMetaPanel'
 import { AdminBackButton }  from '@/components/navigation/AdminBackButton'
@@ -307,6 +308,15 @@ export default function AreaEditorPage() {
           </p>
           <Field label="Hero Heading" value={s(area.hero_heading)} onSave={saveArea('hero_heading')} multiline rows={2} />
           <Field label="Hero Subheading" value={s(area.hero_subheading)} onSave={saveArea('hero_subheading')} multiline rows={3} />
+          <p className="text-xs text-[#6b7280]">
+            Leave the image blank to fall back to the city&apos;s hero image (fn_build_area_seo_page rolls up
+            the city&apos;s hero_image_url/alt automatically when this area has none set).
+          </p>
+          <ImagePickerField
+            label="Hero Image URL" value={s(area.hero_image_url)} onSave={saveArea('hero_image_url')}
+            altLabel="Hero Image Alt" altValue={s(area.hero_image_alt)} onSaveAlt={saveArea('hero_image_alt')}
+            onSaveMeta={saveArea('hero_image_meta')}
+          />
         </div>
       )}
 

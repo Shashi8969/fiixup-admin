@@ -132,6 +132,7 @@ export default function BrandPageEditor() {
           <ImagePickerField
             label="Logo URL" value={String(brand.logo_url ?? '')} onSave={save('logo_url')}
             altLabel="Logo Alt Text" altValue={String(brand.logo_alt ?? '')} onSaveAlt={save('logo_alt')}
+            onSaveMeta={save('logo_meta')}
           />
           <Field label="Tagline" value={String(brand.tagline ?? '')} onSave={save('tagline')} />
           <Field label="Hero Heading" value={String(brand.hero_heading ?? '')} onSave={save('hero_heading')} />
