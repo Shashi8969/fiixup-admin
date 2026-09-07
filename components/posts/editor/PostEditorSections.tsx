@@ -10,6 +10,7 @@ import { BlockEditor } from '@/components/posts/editor/BlockEditor'
 import { ImportContentModal } from '@/components/posts/editor/ImportContentModal'
 import { LinkOptionsProvider } from '@/components/posts/editor/LinkOptionsContext'
 import { PostAttachmentsEditor } from '@/components/posts/editor/BlogAttachmentEditors'
+import { PublishingCard, StatusPill } from '@/components/posts/editor/PublishingCard'
 import { SchemaMultiSelector } from '@/components/schema/SchemaMultiSelector'
 import { SeoMetaPanel } from '@/components/seo/SeoMetaPanel'
 import type { SchemaEntityType } from '@/utils/schema/schemaTypes'
@@ -58,6 +59,10 @@ export function PostEditorBadges({ post, schemaType, blockCount, onToggleFeature
 }) {
   return (
     <div className="flex gap-2 items-center flex-wrap">
+      <StatusPill
+        status={typeof post.status === 'string' ? post.status : 'published'}
+        publishAt={typeof post.publish_at === 'string' ? post.publish_at : null}
+      />
       <span className={clsx('text-xs font-semibold px-3 py-1 rounded-full border',
         post.featured ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-[#2a2d3e] text-[#6b7280] border-[#2a2d3e]'
       )}>
@@ -224,14 +229,17 @@ export function ContentTab({ post, blocks, setBlocks, saving, saveBlocks, save }
   )
 }
 
-export function SettingsTab({ post, save, savePatch, onToggleFeatured }: {
+export function SettingsTab({ post, save, savePatch, onToggleFeatured, onPostChange }: {
   post: Record<string, unknown>
   save: SaveFn
   savePatch: SavePatchFn
   onToggleFeatured: () => void
+  onPostChange: (patch: Record<string, unknown>) => void
 }) {
   return (
     <div className="space-y-5">
+      <PublishingCard post={post} onSaved={onPostChange} />
+
       <div className="admin-card p-6 space-y-5">
       <h2 className="admin-section-title">Post Settings</h2>
 

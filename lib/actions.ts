@@ -6,6 +6,7 @@
 import { getServiceClient } from './supabase'
 import { revalidatePath as nextRevalidatePath } from 'next/cache'
 import { sanitizeWriteData } from './validation'
+import { displayDatesFromUtcIso, formatIst, isPostStatus } from '@/utils/publishing/schedule'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -583,6 +584,81 @@ export async function savePost(
   if (error) return { success: false, error: error.message }
   await revalidateMainSite([`/blog/${postSlug}`, '/blog'])
   return { success: true, message: 'Post saved and live site updated.' }
+}
+
+/**
+ * Sets a post's publishing state in one write.
+ *
+ * Scheduling is enforced in Postgres, not here: the `publish-scheduled-content`
+ * pg_cron job promotes `scheduled` rows to `published` the minute publish_at
+ * passes, rebuilds the seo_pages row through the posts AFTER UPDATE trigger,
+ * and pings /api/revalidate over pg_net. That is what makes a scheduled post go
+ * live with nobody logged in and no machine of ours online — this action only
+ * has to record the intent correctly.
+ */
+export async function schedulePost(
+  postId: string,
+  postSlug: string,
+  input: { status: string; publishAt: string | null; syncDisplayDate?: boolean }
+): Promise<ActionResult> {
+  if (!isPostStatus(input.status)) {
+    return { success: false, error: `Unknown status "${input.status}".` }
+  }
+
+  const patch: Record<string, unknown> = { status: input.status }
+
+  if (input.status === 'scheduled') {
+    if (!input.publishAt) {
+      return { success: false, error: 'Pick a date and time to schedule this post.' }
+    }
+    const when = new Date(input.publishAt).getTime()
+    if (!Number.isFinite(when)) {
+      return { success: false, error: 'That publish time could not be read.' }
+    }
+    // A past time would be picked up by the very next cron tick, which is
+    // "Publish now" wearing a disguise — say so rather than doing it silently.
+    if (when <= Date.now()) {
+      return { success: false, error: 'That time has already passed. Use Publish now instead.' }
+    }
+    patch.publish_at = input.publishAt
+  } else if (input.status === 'published') {
+    // Keep published rows consistent with the rest of the table, which always
+    // carries the instant the post went live.
+    patch.publish_at = input.publishAt ?? new Date().toISOString()
+  } else {
+    // draft / archived: the schedule no longer means anything.
+    patch.publish_at = null
+  }
+
+  if (input.syncDisplayDate && typeof patch.publish_at === 'string') {
+    const dates = displayDatesFromUtcIso(patch.publish_at)
+    if (dates) {
+      patch.date = dates.date
+      patch.date_proper = dates.date_proper
+    }
+  }
+
+  const sb = getServiceClient()
+  const { error } = await sb
+    .from('posts')
+    .update({ ...sanitizeWriteData(patch), updated_at: new Date().toISOString() })
+    .eq('id', postId)
+
+  if (error) return { success: false, error: error.message }
+
+  // Unpublishing has to purge the live page too, so revalidate the same set
+  // either way. /sitemap.xml is included because the posts trigger flips
+  // seo_pages.is_active with the status.
+  await revalidateMainSite([`/blog/${postSlug}`, '/blog', '/sitemap.xml'])
+
+  const message =
+    input.status === 'scheduled'
+      ? `Scheduled for ${formatIst(String(patch.publish_at))}.`
+      : input.status === 'published'
+        ? 'Published and live site updated.'
+        : `Moved to ${input.status} and removed from the live site.`
+
+  return { success: true, message }
 }
 
 // ── SERVICES ──────────────────────────────────────────────────────────────────

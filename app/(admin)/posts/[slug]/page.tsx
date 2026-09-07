@@ -80,6 +80,11 @@ export default function PostEditorPage() {
     return result
   }
 
+  // Local echo for writes that already hit the database through their own
+  // action (the publishing card), so the header badge updates without a refetch.
+  const applyLocal = (patch: Record<string, unknown>) =>
+    setPost((p) => (p ? { ...p, ...patch } : p))
+
   const savePatch = async (patch: Record<string, unknown>) => {
     const result = await savePost(String(post.id), postSlug, patch)
     if (!result.success) return result
@@ -171,7 +176,15 @@ export default function PostEditorPage() {
         />
       )}
 
-      {tab === 'Settings' && <SettingsTab post={post} save={save} savePatch={savePatch} onToggleFeatured={toggleFeatured} />}
+      {tab === 'Settings' && (
+        <SettingsTab
+          post={post}
+          save={save}
+          savePatch={savePatch}
+          onToggleFeatured={toggleFeatured}
+          onPostChange={applyLocal}
+        />
+      )}
     </div>
   )
 }

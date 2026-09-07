@@ -5,19 +5,25 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { getBrowserClient } from '@/lib/supabase'
 import { CreatePostModal } from '@/components/create/CreatePostModal'
+import { StatusPill } from '@/components/posts/editor/PublishingCard'
+import { countdownLabel, formatIst } from '@/utils/publishing/schedule'
 import { FileText, Search, ArrowRight, Star, Plus, Loader2 } from 'lucide-react'
+
+const FILTERS = ['All', 'Published', 'Scheduled', 'Draft'] as const
+type Filter = (typeof FILTERS)[number]
 
 export default function PostsPage() {
   const sb = getBrowserClient()
   const [posts,      setPosts]      = useState<Record<string, unknown>[]>([])
   const [search,     setSearch]     = useState('')
+  const [filter,     setFilter]     = useState<Filter>('All')
   const [loading,    setLoading]    = useState(true)
   const [showCreate, setShowCreate] = useState(false)
 
   const load = async () => {
     setLoading(true)
     const { data } = await sb.from('posts')
-      .select('id,slug,title,category,featured,date,updated_at')
+      .select('id,slug,title,category,featured,date,updated_at,status,publish_at')
       .order('created_at', { ascending: false })
     setPosts(data ?? [])
     setLoading(false)
@@ -25,9 +31,18 @@ export default function PostsPage() {
 
   useEffect(() => { load() }, [])
 
-  const filtered = posts.filter(p =>
-    !search || String(p.title).toLowerCase().includes(search.toLowerCase())
-  )
+  const statusOf = (p: Record<string, unknown>) =>
+    typeof p.status === 'string' ? p.status : 'published'
+
+  const filtered = posts.filter(p => {
+    if (search && !String(p.title).toLowerCase().includes(search.toLowerCase())) return false
+    if (filter === 'All') return true
+    // 'Draft' also covers archived posts — both mean "not going out as-is".
+    if (filter === 'Draft') return statusOf(p) === 'draft' || statusOf(p) === 'archived'
+    return statusOf(p) === filter.toLowerCase()
+  })
+
+  const scheduledCount = posts.filter(p => statusOf(p) === 'scheduled').length
 
   return (
     <div className="space-y-6">
@@ -37,17 +52,30 @@ export default function PostsPage() {
             <FileText className="w-6 h-6 text-green-400" />
             Blog Posts
           </h1>
-          <p className="text-[#94a3b8] text-sm mt-1">{posts.length} posts</p>
+          <p className="text-[#94a3b8] text-sm mt-1">
+            {posts.length} posts
+            {scheduledCount > 0 && ` · ${scheduledCount} waiting to publish`}
+          </p>
         </div>
         <button onClick={() => setShowCreate(true)} className="admin-btn-primary">
           <Plus className="w-4 h-4" /> New Post
         </button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search posts…" className="admin-input pl-9" />
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6b7280]" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search posts…" className="admin-input pl-9" />
+        </div>
+        <div className="flex gap-1 bg-[#1a1d27] border border-[#2a2d3e] rounded-xl p-1">
+          {FILTERS.map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter === f ? 'tab-active' : 'tab-inactive'}`}>
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -63,8 +91,14 @@ export default function PostsPage() {
                 </p>
                 <p className="text-xs text-[#6b7280] mt-0.5">
                   {String(post.category ?? '—')} · {String(post.date ?? '')}
+                  {statusOf(post) === 'scheduled' && typeof post.publish_at === 'string' && (
+                    <span className="text-purple-300">
+                      {' '}· goes live {formatIst(post.publish_at)} ({countdownLabel(post.publish_at)})
+                    </span>
+                  )}
                 </p>
               </div>
+              <StatusPill status={statusOf(post)} publishAt={null} compact />
               {Boolean(post.featured) && (
                 <span className="flex items-center gap-1 text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">
                   <Star className="w-3 h-3" /> Featured
