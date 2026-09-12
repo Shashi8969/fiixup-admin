@@ -11,36 +11,36 @@ import {
   FileText, Package, Layers, LogOut,
   Menu, X, ChevronRight, Globe, Image,
   Route, Star, Activity, HelpCircle, Navigation, SlidersHorizontal, Link2,Home, Inbox,
-  Award, Images, Users, Building2, Car, IndianRupee, PhoneCall,
+  Award, Images, Users, Building2, Car, IndianRupee, PhoneCall, WandSparkles,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const NAV = [
   { href: '/',                    icon: LayoutDashboard, label: 'Dashboard'         },
-    { href: '/homepage',            icon: Home,            label: 'Homepage'          },
+  { href: '/homepage',            icon: Home,            label: 'Homepage'          },
   { href: '/cities',              icon: MapPin,          label: 'Cities'            },
   { href: '/areas',               icon: Building2,       label: 'Areas'             },
   { href: '/location-services',   icon: Settings,        label: 'Location Services' },
-  { href: '/price-table',         icon: IndianRupee,     label: 'Price Table'       },
-  { href: '/city-service-pages',  icon: Layers,          label: 'Category Pages'    },
-  { href: '/global-service-pages',icon: Globe,           label: 'Global Pages'      },
-  { href: '/posts',               icon: FileText,        label: 'Blog Posts'        },
-  { href: '/services',            icon: Package,         label: 'Services'          },
-  { href: '/brands',              icon: Car,             label: 'Brand Pages'       },
-  { href: '/media',               icon: Image,           label: 'Media Library'     },
-  { href: '/reviews',             icon: Star,            label: 'Review Library'    },
-  { href: '/brand-logos',         icon: Award,           label: 'Brand Logos'       },
-  { href: '/gallery',             icon: Images,          label: 'Gallery'           },
-  { href: '/team',                icon: Users,           label: 'Our Team'          },
-  { href: '/faq-library',         icon: HelpCircle,      label: 'FAQ Library'       },
-  { href: '/navigation',          icon: Navigation,      label: 'Navigation'        },
+  { href: '/price-table',         icon: IndianRupee,     label: 'Price Table'        },
+  { href: '/city-service-pages',  icon: Layers,          label: 'Category Pages'     },
+  { href: '/global-service-pages',icon: Globe,           label: 'Global Pages'       },
+  { href: '/posts',               icon: FileText,        label: 'Blog Posts'         },
+  { href: '/services',            icon: Package,         label: 'Services'           },
+  { href: '/brands',              icon: Car,             label: 'Brand Pages'        },
+  { href: '/image-factory',       icon: WandSparkles,    label: 'Image Factory'      },
+  { href: '/media',               icon: Image,           label: 'Media Library'      },
+  { href: '/reviews',             icon: Star,            label: 'Review Library'     },
+  { href: '/brand-logos',         icon: Award,           label: 'Brand Logos'        },
+  { href: '/gallery',             icon: Images,          label: 'Gallery'            },
+  { href: '/team',                icon: Users,           label: 'Our Team'           },
+  { href: '/faq-library',         icon: HelpCircle,      label: 'FAQ Library'        },
+  { href: '/navigation',          icon: Navigation,      label: 'Navigation'         },
   { href: '/internal-links',      icon: Link2,           label: 'Internal Links'     },
   { href: '/leads',               icon: Inbox,           label: 'Leads'              },
-  { href: '/settings',            icon: SlidersHorizontal, label: 'Site Settings'     },
-  { href: '/cta-settings',        icon: PhoneCall,       label: 'Floating Buttons'  },
-  { href: '/site-health',         icon: Activity,        label: 'Site Health'       },
-  { href: '/redirects',            icon: Route,           label: 'Redirects'         },
-
+  { href: '/settings',            icon: SlidersHorizontal, label: 'Site Settings'   },
+  { href: '/cta-settings',        icon: PhoneCall,       label: 'Floating Buttons'   },
+  { href: '/site-health',         icon: Activity,        label: 'Site Health'        },
+  { href: '/redirects',           icon: Route,           label: 'Redirects'          },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -134,7 +134,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex-col overflow-hidden">
         {/* Topbar */}
         <header className="h-14 border-b border-[#2a2d3e] bg-[#1a1d27] flex items-center px-4 gap-4 flex-shrink-0">
           <button
