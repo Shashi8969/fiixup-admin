@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { getServerClient } from '@/lib/supabase-server'
+import { getImageFactoryClient } from './client'
 import type { ImageFactoryTarget } from './types'
 
 type Row = Record<string, unknown>
@@ -91,7 +91,7 @@ export async function discoverImageTargets(options?: {
   includeComplete?: boolean
   blogSectionImages?: number
 }) {
-  const sb = await getServerClient()
+  const sb = await getImageFactoryClient()
   const blogSectionImages = Math.max(0, Math.min(5, options?.blogSectionImages ?? 4))
   const rows: Array<{ target: ImageFactoryTarget; row: Row }> = []
 
