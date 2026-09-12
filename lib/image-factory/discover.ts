@@ -4,6 +4,7 @@ import { getImageFactoryClient } from './client'
 import type { ImageFactoryTarget } from './types'
 
 type Row = Record<string, unknown>
+type SupabaseClient = Awaited<ReturnType<typeof getImageFactoryClient>>
 
 const SOURCES: Array<{
   table: ImageFactoryTarget['table']
@@ -134,6 +135,25 @@ function baseTarget(
   }
 }
 
+async function fetchAllRows(sb: SupabaseClient, table: ImageFactoryTarget['table']) {
+  const pageSize = 1000
+  const all: Row[] = []
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await sb
+      .from(table)
+      .select('*')
+      .range(from, from + pageSize - 1)
+
+    if (error) throw error
+    const page = (data ?? []) as Row[]
+    all.push(...page)
+    if (page.length < pageSize) break
+  }
+
+  return all
+}
+
 export async function discoverImageTargets(options?: {
   includeComplete?: boolean
   blogSectionImages?: number
@@ -143,14 +163,17 @@ export async function discoverImageTargets(options?: {
   const rows: Array<{ target: ImageFactoryTarget; row: Row }> = []
 
   for (const source of SOURCES) {
-    const { data, error } = await sb.from(source.table).select('*').limit(1000)
-    if (error) {
-      console.error(`[image-factory] unable to scan ${source.table}:`, error.message)
-      continue
-    }
-    for (const row of (data ?? []) as Row[]) {
-      const target = baseTarget(source, row)
-      if (target) rows.push({ target, row })
+    try {
+      const data = await fetchAllRows(sb, source.table)
+      for (const row of data) {
+        const target = baseTarget(source, row)
+        if (target) rows.push({ target, row })
+      }
+    } catch (error) {
+      console.error(
+        `[image-factory] unable to scan ${source.table}:`,
+        error instanceof Error ? error.message : error,
+      )
     }
   }
 
