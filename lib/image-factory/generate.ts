@@ -22,7 +22,25 @@ function mediaFolder(target: ImageFactoryTarget) {
   if (target.table === 'posts') return 'blog'
   if (target.table === 'location_services') return 'location-services'
   if (target.table === 'cities') return 'cities'
+  if (target.table === 'areas') return 'areas'
   return 'services'
+}
+
+async function revalidateLivePage(target: ImageFactoryTarget) {
+  const secret = process.env.REVALIDATE_SECRET
+  if (!secret || !target.pagePath) return
+
+  const siteUrl = (process.env.MAIN_SITE_URL || 'https://fiixup.in').replace(/\/$/, '')
+  const paths = target.table === 'posts'
+    ? [target.pagePath, '/blog']
+    : [target.pagePath]
+
+  await Promise.allSettled(paths.map((path) =>
+    fetch(`${siteUrl}/api/revalidate?secret=${encodeURIComponent(secret)}&path=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      cache: 'no-store',
+    }),
+  ))
 }
 
 async function generateBaseImage(prompt: string) {
@@ -126,7 +144,7 @@ async function uploadToMediaLibrary(
     meta_title: target.title,
     meta_description: alt,
     caption: target.sectionHeading || target.title,
-    tags: ['fiixup', target.variant, target.city, target.service, target.category].filter(Boolean),
+    tags: ['fiixup', target.variant, target.city, target.area, target.service, target.category].filter(Boolean),
     crop_mode: 'cover',
     crop_ratio: '3:2',
     focal_x: 50,
@@ -194,11 +212,16 @@ export async function generateTarget(target: ImageFactoryTarget) {
       [target.targetField]: uploaded.publicUrl,
       [target.altField]: alt,
     }
-    if (target.table !== 'posts') patch.og_image_url = uploaded.publicUrl
+    // Areas rebuild their OG data through fn_build_area_seo_page() and do not
+    // expose an og_image_url column directly on the areas table.
+    if (target.table !== 'posts' && target.table !== 'areas') {
+      patch.og_image_url = uploaded.publicUrl
+    }
 
     const { error } = await sb.from(target.table).update(patch).eq('id', target.id)
     if (error) throw new Error(error.message)
   }
 
+  await revalidateLivePage(target)
   return { ...uploaded, alt, prompt }
 }
