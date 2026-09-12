@@ -65,6 +65,9 @@ function baseTarget(
   row: Row,
 ): ImageFactoryTarget | null {
   if (row.id === undefined || row.id === null) return null
+  // Some CMS page types do not yet expose a hero image column. Skip them safely
+  // instead of creating a job that would fail when it tries to update the row.
+  if (!Object.prototype.hasOwnProperty.call(row, source.targetField)) return null
 
   const slug = text(row, 'slug', 'service_slug', 'city_slug') || String(row.id)
   const title = text(row, 'hero_heading', 'title', 'service_name', 'name', 'meta_title') || slug
