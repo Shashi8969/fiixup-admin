@@ -11,6 +11,7 @@ const SOURCES: Array<{
   altField: ImageFactoryTarget['altField']
 }> = [
   { table: 'cities',               targetField: 'hero_image_url', altField: 'hero_image_alt' },
+  { table: 'areas',                targetField: 'hero_image_url', altField: 'hero_image_alt' },
   { table: 'services',             targetField: 'image_url',      altField: 'image_alt' },
   { table: 'location_services',    targetField: 'hero_image_url', altField: 'hero_image_alt' },
   { table: 'global_service_pages', targetField: 'hero_image_url', altField: 'hero_image_alt' },
@@ -74,6 +75,33 @@ function sectionKey(postId: string | number, heading: string) {
   return `posts:${String(postId)}:section:${stable || 'topic'}`
 }
 
+function buildPagePath(table: ImageFactoryTarget['table'], row: Row, slug: string) {
+  const citySlug = text(row, 'city_slug')
+  const areaSlug = text(row, 'area_slug')
+  const serviceSlug = text(row, 'service_slug') || (table === 'services' || table === 'global_service_pages' ? slug : '')
+  const explicit = text(row, 'url_path')
+  if (explicit.startsWith('/')) return explicit
+
+  switch (table) {
+    case 'cities':
+      return `/${slug}`
+    case 'areas':
+      return citySlug ? `/${citySlug}/${slug}` : undefined
+    case 'services':
+    case 'global_service_pages':
+      return `/services/${serviceSlug || slug}`
+    case 'location_services':
+      if (!citySlug || !serviceSlug) return undefined
+      return areaSlug
+        ? `/${citySlug}/${areaSlug}/${serviceSlug}`
+        : `/${citySlug}/${serviceSlug}`
+    case 'city_service_pages':
+      return citySlug && serviceSlug ? `/${citySlug}/services/${serviceSlug}` : undefined
+    case 'posts':
+      return `/blog/${slug}`
+  }
+}
+
 function baseTarget(
   source: (typeof SOURCES)[number],
   row: Row,
@@ -86,6 +114,7 @@ function baseTarget(
   const slug = text(row, 'slug', 'service_slug', 'city_slug') || String(row.id)
   const title = text(row, 'hero_heading', 'title', 'service_name', 'name', 'meta_title') || slug
   const current = typeof row[source.targetField] === 'string' ? String(row[source.targetField]) : null
+  const isArea = source.table === 'areas'
 
   return {
     key: `${source.table}:${String(row.id)}:${source.table === 'posts' ? 'cover' : 'hero'}`,
@@ -94,9 +123,10 @@ function baseTarget(
     slug,
     title,
     city: source.table === 'cities' ? text(row, 'name') : text(row, 'city_name', 'city_slug'),
-    area: text(row, 'area_name', 'area_slug'),
+    area: isArea ? text(row, 'name', 'slug') : text(row, 'area_name', 'area_slug'),
     service: text(row, 'service_name', 'short_title', 'title'),
     category: text(row, 'service_category', 'category'),
+    pagePath: buildPagePath(source.table, row, slug),
     currentImage: current,
     targetField: source.targetField,
     altField: source.altField,
