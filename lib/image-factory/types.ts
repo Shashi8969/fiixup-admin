@@ -2,6 +2,7 @@ export type ImageVariant = 'hero' | 'cover' | 'section'
 
 export type ImageFactoryTable =
   | 'cities'
+  | 'areas'
   | 'services'
   | 'location_services'
   | 'global_service_pages'
@@ -18,6 +19,7 @@ export type ImageFactoryTarget = {
   area?: string
   service?: string
   category?: string
+  pagePath?: string
   currentImage?: string | null
   targetField: 'hero_image_url' | 'image_url' | 'image'
   altField: 'hero_image_alt' | 'image_alt'
