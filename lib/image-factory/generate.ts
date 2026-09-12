@@ -3,12 +3,12 @@ import 'server-only'
 import crypto from 'node:crypto'
 import OpenAI from 'openai'
 import sharp from 'sharp'
-import { getServerClient } from '@/lib/supabase-server'
+import { getImageFactoryClient } from './client'
 import { buildAltText, buildImagePrompt } from './prompt'
 import type { ImageFactoryTarget } from './types'
 
 type Row = Record<string, unknown>
-type SupabaseClient = Awaited<ReturnType<typeof getServerClient>>
+type SupabaseClient = Awaited<ReturnType<typeof getImageFactoryClient>>
 
 function safeFilePart(value: string) {
   return value
@@ -172,7 +172,7 @@ async function attachBlogSection(
 }
 
 export async function generateTarget(target: ImageFactoryTarget) {
-  const sb = await getServerClient()
+  const sb = await getImageFactoryClient()
   const prompt = buildImagePrompt(target)
   const base = await generateBaseImage(prompt)
   const includePhone = target.variant !== 'section' && process.env.FIIXUP_IMAGE_PHONE !== 'false'
