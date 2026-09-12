@@ -37,13 +37,17 @@ function looksDefault(url?: string | null) {
   return DEFAULT_HINTS.some(h => lower.includes(h))
 }
 
-function sectionImageCount(content: unknown) {
-  if (!Array.isArray(content)) return 0
-  return content.filter(block => {
-    if (!block || typeof block !== 'object') return false
+function existingFactoryKeys(content: unknown) {
+  const keys = new Set<string>()
+  if (!Array.isArray(content)) return keys
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue
     const row = block as Row
-    return row.type === 'image' && row.source === 'fiixup-image-factory'
-  }).length
+    if (row.type === 'image' && row.source === 'fiixup-image-factory' && typeof row.generation_key === 'string') {
+      keys.add(row.generation_key)
+    }
+  }
+  return keys
 }
 
 function headings(content: unknown) {
@@ -58,6 +62,16 @@ function headings(content: unknown) {
     if (heading && level >= 2 && level <= 3) result.push({ heading, index })
   })
   return result
+}
+
+function sectionKey(postId: string | number, heading: string) {
+  const stable = heading
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80)
+  return `posts:${String(postId)}:section:${stable || 'topic'}`
 }
 
 function baseTarget(
@@ -124,15 +138,20 @@ export async function discoverImageTargets(options?: {
     }
 
     if (target.table !== 'posts' || blogSectionImages === 0) continue
-    const existing = sectionImageCount(row.content)
-    const remaining = Math.max(0, blogSectionImages - existing)
+    const existing = existingFactoryKeys(row.content)
+    const remaining = Math.max(0, blogSectionImages - existing.size)
     if (!remaining) continue
 
-    const choices = headings(row.content).slice(0, blogSectionImages)
-    choices.slice(0, remaining).forEach(({ heading, index }) => {
+    const choices = headings(row.content)
+      .slice(0, blogSectionImages)
+      .map(({ heading, index }) => ({ heading, index, key: sectionKey(target.id, heading) }))
+      .filter(item => !existing.has(item.key))
+      .slice(0, remaining)
+
+    choices.forEach(({ heading, index, key }) => {
       targets.push({
         ...target,
-        key: `posts:${String(target.id)}:section:${index}`,
+        key,
         currentImage: null,
         variant: 'section',
         sectionHeading: heading,
