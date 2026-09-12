@@ -18,6 +18,13 @@ function safeFilePart(value: string) {
     .slice(0, 90) || 'image'
 }
 
+function mediaFolder(target: ImageFactoryTarget) {
+  if (target.table === 'posts') return 'blog'
+  if (target.table === 'location_services') return 'location-services'
+  if (target.table === 'cities') return 'cities'
+  return 'services'
+}
+
 async function generateBaseImage(prompt: string) {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured')
 
@@ -26,7 +33,7 @@ async function generateBaseImage(prompt: string) {
     model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2.5-sunburst',
     prompt,
     size: '1536x1024',
-    quality: (process.env.OPENAI_IMAGE_QUALITY || 'medium') as 'low' | 'medium' | 'high' | 'auto',
+    quality: (process.env.OPENAI_IMAGE_QUALITY || 'medium') as 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto',
     n: 1,
   })
 
@@ -107,7 +114,7 @@ async function uploadToMediaLibrary(
   const { error: mediaError } = await sb.from('media_library').insert({
     storage_path: storagePath,
     public_url: publicUrl,
-    folder: target.table === 'posts' ? 'blogs' : 'services',
+    folder: mediaFolder(target),
     file_name: storagePath.split('/').pop(),
     file_size: image.byteLength,
     mime_type: 'image/webp',
