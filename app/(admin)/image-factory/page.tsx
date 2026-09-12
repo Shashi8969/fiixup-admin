@@ -93,6 +93,7 @@ export default function ImageFactoryPage() {
   }
 
   const visible = scan?.targets.slice(0, 80) ?? []
+  const heroCoverCount = (scan?.byVariant?.hero ?? 0) + (scan?.byVariant?.cover ?? 0)
 
   return (
     <div className="space-y-6">
@@ -115,7 +116,7 @@ export default function ImageFactoryPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Images waiting" value={scan?.total ?? 0} icon={<ImageIcon className="w-4 h-4" />} />
-        <Stat label="Hero / cover" value={scan?.byVariant?.hero ?? 0 + (scan?.byVariant?.cover ?? 0)} icon={<Sparkles className="w-4 h-4" />} />
+        <Stat label="Hero / cover" value={heroCoverCount} icon={<Sparkles className="w-4 h-4" />} />
         <Stat label="Blog section" value={scan?.byVariant?.section ?? 0} icon={<Bot className="w-4 h-4" />} />
         <Stat label="Completed this run" value={completed} icon={<CheckCircle2 className="w-4 h-4" />} />
       </div>
