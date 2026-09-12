@@ -7,6 +7,7 @@ export const maxDuration = 300
 
 const ALLOWED = new Map<string, { targetField: string; altField: string }>([
   ['cities',               { targetField: 'hero_image_url', altField: 'hero_image_alt' }],
+  ['areas',                { targetField: 'hero_image_url', altField: 'hero_image_alt' }],
   ['services',             { targetField: 'image_url',      altField: 'image_alt' }],
   ['location_services',    { targetField: 'hero_image_url', altField: 'hero_image_alt' }],
   ['global_service_pages', { targetField: 'hero_image_url', altField: 'hero_image_alt' }],
