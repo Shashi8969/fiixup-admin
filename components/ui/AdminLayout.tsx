@@ -134,7 +134,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       {/* Main area */}
-      <div className="flex-1 flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
         <header className="h-14 border-b border-[#2a2d3e] bg-[#1a1d27] flex items-center px-4 gap-4 flex-shrink-0">
           <button
