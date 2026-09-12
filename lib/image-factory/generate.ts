@@ -1,0 +1,227 @@
+import 'server-only'
+
+import crypto from 'node:crypto'
+import OpenAI from 'openai'
+import sharp from 'sharp'
+import { getImageFactoryClient } from './client'
+import { buildAltText, buildImagePrompt } from './prompt'
+import type { ImageFactoryTarget } from './types'
+
+type Row = Record<string, unknown>
+type SupabaseClient = Awaited<ReturnType<typeof getImageFactoryClient>>
+
+function safeFilePart(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 90) || 'image'
+}
+
+function mediaFolder(target: ImageFactoryTarget) {
+  if (target.table === 'posts') return 'blog'
+  if (target.table === 'location_services') return 'location-services'
+  if (target.table === 'cities') return 'cities'
+  if (target.table === 'areas') return 'areas'
+  return 'services'
+}
+
+async function revalidateLivePage(target: ImageFactoryTarget) {
+  const secret = process.env.REVALIDATE_SECRET
+  if (!secret || !target.pagePath) return
+
+  const siteUrl = (process.env.MAIN_SITE_URL || 'https://fiixup.in').replace(/\/$/, '')
+  const paths = target.table === 'posts'
+    ? [target.pagePath, '/blog']
+    : [target.pagePath]
+
+  await Promise.allSettled(paths.map((path) =>
+    fetch(`${siteUrl}/api/revalidate?secret=${encodeURIComponent(secret)}&path=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      cache: 'no-store',
+    }),
+  ))
+}
+
+async function generateBaseImage(prompt: string) {
+  if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured')
+
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const response = await client.images.generate({
+    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2.5-sunburst',
+    prompt,
+    size: '1536x1024',
+    quality: (process.env.OPENAI_IMAGE_QUALITY || 'medium') as 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto',
+    n: 1,
+  })
+
+  const item = response.data?.[0]
+  if (item?.b64_json) return Buffer.from(item.b64_json, 'base64')
+  if (item?.url) {
+    const downloaded = await fetch(item.url)
+    if (!downloaded.ok) throw new Error('Generated image could not be downloaded')
+    return Buffer.from(await downloaded.arrayBuffer())
+  }
+  throw new Error('Image API returned no image data')
+}
+
+async function brandImage(input: Buffer, includePhone: boolean) {
+  // Keep the official logo out of the generation prompt so the model never redraws it.
+  // Set FIIXUP_LOGO_URL to the exact approved logo asset if its public URL changes.
+  const logoUrl = process.env.FIIXUP_LOGO_URL || 'https://fiixup.in/assets/logo.webp'
+  const logoResponse = await fetch(logoUrl, { cache: 'no-store' })
+  if (!logoResponse.ok) throw new Error(`Could not load Fiixup logo: ${logoResponse.status}`)
+
+  const logo = Buffer.from(await logoResponse.arrayBuffer())
+  const exactLogo = await sharp(logo)
+    .resize({ width: 245, withoutEnlargement: true })
+    .png()
+    .toBuffer()
+
+  const overlays: Array<{ input: Buffer; top: number; left: number }> = [
+    { input: exactLogo, top: 28, left: 1536 - 245 - 32 },
+  ]
+
+  if (includePhone) {
+    const phone = Buffer.from(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="390" height="64">
+        <rect width="390" height="64" rx="22" fill="#071a3a" fill-opacity="0.92"/>
+        <text x="195" y="41" text-anchor="middle" font-family="Arial, sans-serif"
+          font-size="27" font-weight="700" fill="#ffffff">Call / WhatsApp +91 81974 59732</text>
+      </svg>`)
+    overlays.push({ input: phone, top: 1024 - 64 - 28, left: 1536 - 390 - 32 })
+  }
+
+  return sharp(input)
+    .rotate()
+    .resize(1536, 1024, { fit: 'cover' })
+    .composite(overlays)
+    .webp({ quality: 84, effort: 5 })
+    .toBuffer()
+}
+
+async function uploadToMediaLibrary(
+  sb: SupabaseClient,
+  target: ImageFactoryTarget,
+  image: Buffer,
+  alt: string,
+) {
+  const stamp = crypto
+    .createHash('sha1')
+    .update(`${target.key}:${Date.now()}`)
+    .digest('hex')
+    .slice(0, 10)
+
+  const base = safeFilePart(
+    `${target.slug}-${target.variant}${target.sectionHeading ? `-${target.sectionHeading}` : ''}`,
+  )
+  const storagePath = `generated/${base}-${stamp}.webp`
+
+  const { error: uploadError } = await sb.storage
+    .from('images')
+    .upload(storagePath, image, {
+      contentType: 'image/webp',
+      cacheControl: '31536000',
+      upsert: false,
+    })
+  if (uploadError) throw new Error(uploadError.message)
+
+  const { data } = sb.storage.from('images').getPublicUrl(storagePath)
+  const publicUrl = data.publicUrl
+
+  const { error: mediaError } = await sb.from('media_library').insert({
+    storage_path: storagePath,
+    public_url: publicUrl,
+    folder: mediaFolder(target),
+    file_name: storagePath.split('/').pop(),
+    file_size: image.byteLength,
+    mime_type: 'image/webp',
+    width: 1536,
+    height: 1024,
+    title: target.sectionHeading || target.title,
+    alt_text: alt,
+    description: `Generated by Fiixup Image Factory for ${target.title}`,
+    meta_title: target.title,
+    meta_description: alt,
+    caption: target.sectionHeading || target.title,
+    tags: ['fiixup', target.variant, target.city, target.area, target.service, target.category].filter(Boolean),
+    crop_mode: 'cover',
+    crop_ratio: '3:2',
+    focal_x: 50,
+    focal_y: 50,
+  })
+  if (mediaError) console.warn('[image-factory] media_library metadata:', mediaError.message)
+
+  return { storagePath, publicUrl }
+}
+
+function blockText(block: Row) {
+  for (const key of ['content', 'heading', 'title']) {
+    if (typeof block[key] === 'string' && String(block[key]).trim()) return String(block[key]).trim()
+  }
+  return ''
+}
+
+async function attachBlogSection(
+  sb: SupabaseClient,
+  target: ImageFactoryTarget,
+  publicUrl: string,
+  alt: string,
+) {
+  const { data: post, error } = await sb.from('posts').select('content').eq('id', target.id).single()
+  if (error) throw new Error(error.message)
+
+  const content = Array.isArray(post?.content) ? [...post.content] as Row[] : []
+  if (content.some(block => block?.generation_key === target.key)) return
+
+  const headingIndex = content.findIndex((block, index) => {
+    if (block?.type !== 'heading') return false
+    if (target.sectionHeading && blockText(block) === target.sectionHeading) return true
+    return index === target.sectionIndex
+  })
+  const insertAt = headingIndex >= 0
+    ? headingIndex + 1
+    : Math.min(content.length, (target.sectionIndex ?? content.length) + 1)
+
+  content.splice(insertAt, 0, {
+    type: 'image',
+    url: publicUrl,
+    alt,
+    caption: target.sectionHeading || '',
+    source: 'fiixup-image-factory',
+    generation_key: target.key,
+  })
+
+  const { error: updateError } = await sb.from('posts').update({ content }).eq('id', target.id)
+  if (updateError) throw new Error(updateError.message)
+}
+
+export async function generateTarget(target: ImageFactoryTarget) {
+  const sb = await getImageFactoryClient()
+  const prompt = buildImagePrompt(target)
+  const base = await generateBaseImage(prompt)
+  const includePhone = target.variant !== 'section' && process.env.FIIXUP_IMAGE_PHONE !== 'false'
+  const branded = await brandImage(base, includePhone)
+  const alt = buildAltText(target)
+  const uploaded = await uploadToMediaLibrary(sb, target, branded, alt)
+
+  if (target.variant === 'section') {
+    await attachBlogSection(sb, target, uploaded.publicUrl, alt)
+  } else {
+    const patch: Row = {
+      [target.targetField]: uploaded.publicUrl,
+      [target.altField]: alt,
+    }
+    // Areas rebuild their OG data through fn_build_area_seo_page() and do not
+    // expose an og_image_url column directly on the areas table.
+    if (target.table !== 'posts' && target.table !== 'areas') {
+      patch.og_image_url = uploaded.publicUrl
+    }
+
+    const { error } = await sb.from(target.table).update(patch).eq('id', target.id)
+    if (error) throw new Error(error.message)
+  }
+
+  await revalidateLivePage(target)
+  return { ...uploaded, alt, prompt }
+}

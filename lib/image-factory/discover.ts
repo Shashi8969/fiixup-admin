@@ -1,0 +1,217 @@
+import 'server-only'
+
+import { getImageFactoryClient } from './client'
+import type { ImageFactoryTarget } from './types'
+
+type Row = Record<string, unknown>
+type SupabaseClient = Awaited<ReturnType<typeof getImageFactoryClient>>
+
+const SOURCES: Array<{
+  table: ImageFactoryTarget['table']
+  targetField: ImageFactoryTarget['targetField']
+  altField: ImageFactoryTarget['altField']
+}> = [
+  { table: 'cities',               targetField: 'hero_image_url', altField: 'hero_image_alt' },
+  { table: 'areas',                targetField: 'hero_image_url', altField: 'hero_image_alt' },
+  { table: 'services',             targetField: 'image_url',      altField: 'image_alt' },
+  { table: 'location_services',    targetField: 'hero_image_url', altField: 'hero_image_alt' },
+  { table: 'global_service_pages', targetField: 'hero_image_url', altField: 'hero_image_alt' },
+  { table: 'city_service_pages',   targetField: 'hero_image_url', altField: 'hero_image_alt' },
+  { table: 'posts',                targetField: 'image',          altField: 'image_alt' },
+]
+
+const DEFAULT_HINTS = [
+  '/default', 'default-', 'placeholder', 'fallback',
+  'og-image.webp', 'hero.webp', 'hero.jpg', 'hero.png',
+]
+
+function text(row: Row, ...keys: string[]) {
+  for (const key of keys) {
+    const value = row[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function looksDefault(url?: string | null) {
+  if (!url) return true
+  const lower = url.toLowerCase()
+  return DEFAULT_HINTS.some(h => lower.includes(h))
+}
+
+function existingFactoryKeys(content: unknown) {
+  const keys = new Set<string>()
+  if (!Array.isArray(content)) return keys
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue
+    const row = block as Row
+    if (row.type === 'image' && row.source === 'fiixup-image-factory' && typeof row.generation_key === 'string') {
+      keys.add(row.generation_key)
+    }
+  }
+  return keys
+}
+
+function headings(content: unknown) {
+  if (!Array.isArray(content)) return [] as Array<{ heading: string; index: number }>
+  const result: Array<{ heading: string; index: number }> = []
+  content.forEach((block, index) => {
+    if (!block || typeof block !== 'object') return
+    const row = block as Row
+    if (row.type !== 'heading') return
+    const level = Number(row.level ?? 2)
+    const heading = text(row, 'content', 'heading', 'title')
+    if (heading && level >= 2 && level <= 3) result.push({ heading, index })
+  })
+  return result
+}
+
+function sectionKey(postId: string | number, heading: string) {
+  const stable = heading
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80)
+  return `posts:${String(postId)}:section:${stable || 'topic'}`
+}
+
+function buildPagePath(table: ImageFactoryTarget['table'], row: Row, slug: string) {
+  const citySlug = text(row, 'city_slug')
+  const areaSlug = text(row, 'area_slug')
+  const serviceSlug = text(row, 'service_slug') || (table === 'services' || table === 'global_service_pages' ? slug : '')
+  const explicit = text(row, 'url_path')
+  if (explicit.startsWith('/')) return explicit
+
+  switch (table) {
+    case 'cities':
+      return `/${slug}`
+    case 'areas':
+      return citySlug ? `/${citySlug}/${slug}` : undefined
+    case 'services':
+    case 'global_service_pages':
+      return `/services/${serviceSlug || slug}`
+    case 'location_services':
+      if (!citySlug || !serviceSlug) return undefined
+      return areaSlug
+        ? `/${citySlug}/${areaSlug}/${serviceSlug}`
+        : `/${citySlug}/${serviceSlug}`
+    case 'city_service_pages':
+      return citySlug && serviceSlug ? `/${citySlug}/services/${serviceSlug}` : undefined
+    case 'posts':
+      return `/blog/${slug}`
+  }
+}
+
+function baseTarget(
+  source: (typeof SOURCES)[number],
+  row: Row,
+): ImageFactoryTarget | null {
+  if (row.id === undefined || row.id === null) return null
+  // Some CMS page types do not yet expose a hero image column. Skip them safely
+  // instead of creating a job that would fail when it tries to update the row.
+  if (!Object.prototype.hasOwnProperty.call(row, source.targetField)) return null
+
+  const slug = text(row, 'slug', 'service_slug', 'city_slug') || String(row.id)
+  const title = text(row, 'hero_heading', 'title', 'service_name', 'name', 'meta_title') || slug
+  const current = typeof row[source.targetField] === 'string' ? String(row[source.targetField]) : null
+  const isArea = source.table === 'areas'
+
+  return {
+    key: `${source.table}:${String(row.id)}:${source.table === 'posts' ? 'cover' : 'hero'}`,
+    table: source.table,
+    id: row.id as string | number,
+    slug,
+    title,
+    city: source.table === 'cities' ? text(row, 'name') : text(row, 'city_name', 'city_slug'),
+    area: isArea ? text(row, 'name', 'slug') : text(row, 'area_name', 'area_slug'),
+    service: text(row, 'service_name', 'short_title', 'title'),
+    category: text(row, 'service_category', 'category'),
+    pagePath: buildPagePath(source.table, row, slug),
+    currentImage: current,
+    targetField: source.targetField,
+    altField: source.altField,
+    variant: source.table === 'posts' ? 'cover' : 'hero',
+  }
+}
+
+async function fetchAllRows(sb: SupabaseClient, table: ImageFactoryTarget['table']) {
+  const pageSize = 1000
+  const all: Row[] = []
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await sb
+      .from(table)
+      .select('*')
+      .range(from, from + pageSize - 1)
+
+    if (error) throw error
+    const page = (data ?? []) as Row[]
+    all.push(...page)
+    if (page.length < pageSize) break
+  }
+
+  return all
+}
+
+export async function discoverImageTargets(options?: {
+  includeComplete?: boolean
+  blogSectionImages?: number
+}) {
+  const sb = await getImageFactoryClient()
+  const blogSectionImages = Math.max(0, Math.min(5, options?.blogSectionImages ?? 4))
+  const rows: Array<{ target: ImageFactoryTarget; row: Row }> = []
+
+  for (const source of SOURCES) {
+    try {
+      const data = await fetchAllRows(sb, source.table)
+      for (const row of data) {
+        const target = baseTarget(source, row)
+        if (target) rows.push({ target, row })
+      }
+    } catch (error) {
+      console.error(
+        `[image-factory] unable to scan ${source.table}:`,
+        error instanceof Error ? error.message : error,
+      )
+    }
+  }
+
+  const usage = new Map<string, number>()
+  rows.forEach(({ target }) => {
+    if (!target.currentImage) return
+    usage.set(target.currentImage, (usage.get(target.currentImage) ?? 0) + 1)
+  })
+
+  const targets: ImageFactoryTarget[] = []
+  for (const { target, row } of rows) {
+    const duplicated = Boolean(target.currentImage && (usage.get(target.currentImage) ?? 0) > 1)
+    if (options?.includeComplete || looksDefault(target.currentImage) || duplicated) {
+      targets.push(target)
+    }
+
+    if (target.table !== 'posts' || blogSectionImages === 0) continue
+    const existing = existingFactoryKeys(row.content)
+    const remaining = Math.max(0, blogSectionImages - existing.size)
+    if (!remaining) continue
+
+    const choices = headings(row.content)
+      .slice(0, blogSectionImages)
+      .map(({ heading, index }) => ({ heading, index, key: sectionKey(target.id, heading) }))
+      .filter(item => !existing.has(item.key))
+      .slice(0, remaining)
+
+    choices.forEach(({ heading, index, key }) => {
+      targets.push({
+        ...target,
+        key,
+        currentImage: null,
+        variant: 'section',
+        sectionHeading: heading,
+        sectionIndex: index,
+      })
+    })
+  }
+
+  return targets
+}

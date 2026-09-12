@@ -6,9 +6,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // ── Always allow these paths ──────────────────────────────────────────────
+  // The image-factory cron endpoint performs its own Bearer-token check.
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/reset-password') ||
+    pathname === '/api/image-factory/cron' ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
   ) {
